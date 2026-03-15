@@ -14,6 +14,7 @@ Examples:
 import argparse
 import os
 import sys
+import requests
 
 from beemesh.version import __version__
 
@@ -74,7 +75,11 @@ def run_bee(
         auth_token=auth_token,
         heartbeat_interval=heartbeat_interval,
     )
-    worker.run()
+
+    try:
+        worker.run()
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to Hive. Is it running?")
 
 
 def submit_diffusion(
