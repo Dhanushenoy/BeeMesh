@@ -168,8 +168,13 @@ def monitor_hive(hive_url, interval=2):
             try:
                 r = requests.get(f"{hive_url}/status")
             except requests.exceptions.ConnectionError:
-                print("Error: Could not connect to Hive. Is it running?")
-                break
+                print(
+                    "Error: Could not connect to Hive. Retrying in {} seconds...".format(
+                        interval
+                    )
+                )
+                time.sleep(interval)
+                continue
 
             data = r.json()
 
