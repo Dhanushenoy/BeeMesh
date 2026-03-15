@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bee-mesh"
+version = "0.1.1"
+description = "A lightweight volunteer distributed computing framework for scientific workloads."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name="Dhanush Vittal Shenoy"}]
+requires-python = ">=3.9"
+keywords = ["distributed-computing", "volunteer-computing", "cfd", "scientific-computing", "fastapi"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Distributed Computing",
+]
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "requests",
+    "psutil",
+    "numpy",
+]
+
+[project.scripts]
+beemesh = "beemesh.cli.cli:main"
+bee-mesh = "beemesh.cli.cli:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["beemesh*"]
