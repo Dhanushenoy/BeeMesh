@@ -149,6 +149,13 @@ def progress_bar(done, total, width=20):
 def monitor_hive(hive_url, interval=2):
     """Continuously monitor Hive status."""
 
+    # Initial check to see if Hive is reachable
+    try:
+        r = requests.get(f"{hive_url}/status")
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to Hive. Is it running?")
+        return
+
     import time
 
     print("\nBeeMesh live monitor (Ctrl+C to stop)\n")
