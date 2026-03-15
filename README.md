@@ -4,6 +4,14 @@
 
 The goal of BeeMesh is to make it easy to execute distributed scientific simulations without complex cluster infrastructure.
 
+# Installation
+
+BeeMesh is available on PyPI:
+
+```bash
+pip install beemesh
+```
+
 ---
 
 # Core Idea
