@@ -120,7 +120,11 @@ def show_status(hive_url):
 
     import requests
 
-    r = requests.get(f"{hive_url}/status")
+    try:
+        r = requests.get(f"{hive_url}/status")
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to Hive. Is it running?")
+        return
 
     print("\nHive status:")
     print(r.json())
@@ -159,7 +163,12 @@ def monitor_hive(hive_url, interval=2):
 
     try:
         while True:
-            r = requests.get(f"{hive_url}/status")
+            try:
+                r = requests.get(f"{hive_url}/status")
+            except requests.exceptions.ConnectionError:
+                print("Error: Could not connect to Hive. Is it running?")
+                break
+
             data = r.json()
 
             workers = data.get("workers", {})
