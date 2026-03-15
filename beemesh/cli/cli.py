@@ -94,8 +94,6 @@ def submit_diffusion(
 ):
     """Submit a diffusion job to the Hive."""
 
-    import requests
-
     payload = {
         "job_type": "diffusion",
         "payload": {
@@ -117,8 +115,6 @@ def submit_diffusion(
 
 def show_status(hive_url):
     """Query Hive status."""
-
-    import requests
 
     try:
         r = requests.get(f"{hive_url}/status")
@@ -153,7 +149,6 @@ def progress_bar(done, total, width=20):
 def monitor_hive(hive_url, interval=2):
     """Continuously monitor Hive status."""
 
-    import requests
     import time
 
     print("\nBeeMesh live monitor (Ctrl+C to stop)\n")
