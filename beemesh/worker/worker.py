@@ -21,6 +21,7 @@ Flow:
 """
 
 import os
+import platform
 import threading
 import time
 
@@ -68,11 +69,15 @@ class BeeWorker:
             ram_gb = 0.0
 
         gpu = None  # placeholder for future GPU detection
+        gpu_memory_gb = 0.0
+        architecture = platform.machine() or None
 
         return {
             "cpu_cores": cpu_cores,
             "ram_gb": ram_gb,
             "gpu": gpu,
+            "gpu_memory_gb": gpu_memory_gb,
+            "architecture": architecture,
         }
 
     # --------------------------------------------------
@@ -91,6 +96,8 @@ class BeeWorker:
                 "cpu_cores": cap["cpu_cores"],
                 "ram_gb": cap["ram_gb"],
                 "gpu": cap["gpu"],
+                "gpu_memory_gb": cap["gpu_memory_gb"],
+                "architecture": cap["architecture"],
                 "auth_token": self.auth_token,
             },
             timeout=30,
@@ -102,7 +109,9 @@ class BeeWorker:
 
         print(f"Registered with Hive as {self.worker_id}")
         print(
-            f"[{self.worker_id}] CPU={cap['cpu_cores']} cores | RAM={cap['ram_gb']} GB | GPU={cap['gpu']}"
+            f"[{self.worker_id}] CPU={cap['cpu_cores']} cores | "
+            f"RAM={cap['ram_gb']} GB | GPU={cap['gpu']} | "
+            f"GPU_MEM={cap['gpu_memory_gb']} GB | ARCH={cap['architecture']}"
         )
 
     # --------------------------------------------------

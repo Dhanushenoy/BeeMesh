@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bee-mesh"
-version = "0.1.1"
+version = "1.0.0"
 description = "A lightweight volunteer distributed computing framework for scientific workloads."
 readme = "README.md"
 license = "MIT"

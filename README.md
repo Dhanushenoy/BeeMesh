@@ -145,6 +145,31 @@ Monitor the cluster:
 beemesh monitor
 ```
 
+Launch a Python script that uses `with beemesh.parallel():`:
+
+```python
+import beemesh
+
+cases = [1, 2, 3, 4]
+
+with beemesh.parallel():
+    for case in cases:
+        print(case)
+```
+
+```bash
+beemesh --launch examples/parallel_sweep_test/launch.py --hive-url http://127.0.0.1:8000 --auth-token <client-token>
+```
+
+See [launch.py](/Users/dhanush/Codes/beemesh/examples/parallel_sweep_test/launch.py) for a complete runnable sweep example.
+For a parameter sweep / Monte Carlo style launch, see [launch.py](/Users/dhanush/Codes/beemesh/examples/monte_carlo_test/launch.py).
+For a simple neural-network hyperparameter search, see [launch.py](/Users/dhanush/Codes/beemesh/examples/nn_hyperparam_test/launch.py).
+For a tiled Mandelbrot fractal render, see [launch.py](/Users/dhanush/Codes/beemesh/examples/mandelbrot_test/launch.py).
+For a coupled 2D advection wave with ghost exchange each Euler step, see [launch.py](/Users/dhanush/Codes/beemesh/examples/advection_grid_test/launch.py).
+For a compiled C++ executable sweep, build [simulate_case.cpp](/Users/dhanush/Codes/beemesh/examples/cpp_exec_test/simulate_case.cpp) and run `beemesh launch ./simulate_case --sweep 0:1000`.
+These launch examples define `beemesh_finalize(...)`, so BeeMesh can generate plots automatically after remote execution finishes.
+If you want standalone post-processing, see [visualize.py](/Users/dhanush/Codes/beemesh/examples/parallel_sweep_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/monte_carlo_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/nn_hyperparam_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/mandelbrot_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/advection_grid_test/visualize.py), and [visualize.py](/Users/dhanush/Codes/beemesh/examples/cpp_exec_test/visualize.py).
+
 ---
 
 # Multi-Machine Launch
@@ -183,6 +208,9 @@ beemesh submit-diffusion --nx 512 --ny 512 --blocks-x 4 --blocks-y 4 --hive-url 
 
 BeeMesh uses worker heartbeats and leased tasks, so unfinished work can be
 requeued when a remote worker disappears.
+
+Completed task results are stored on the Hive under `server_results/<job_id>/`
+by default. You can change that location with `BEEMESH_RESULTS_DIR`.
 
 ---
 

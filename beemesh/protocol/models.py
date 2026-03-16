@@ -46,6 +46,8 @@ class WorkerRegister(BaseModel):
     cpu_cores: int
     ram_gb: float
     gpu: Optional[str] = None
+    gpu_memory_gb: float = 0.0
+    architecture: Optional[str] = None
     auth_token: Optional[str] = None
 
 
@@ -79,6 +81,7 @@ class Task(BaseModel):
     task_id: str
     task_type: str
     payload: Dict[str, Any]
+    requirements: Optional[Dict[str, Any]] = None
     lease_timeout_s: Optional[int] = None
 
 

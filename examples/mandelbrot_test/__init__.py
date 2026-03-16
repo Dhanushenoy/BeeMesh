@@ -1,0 +1,1 @@
+"""BeeMesh Mandelbrot rendering example."""

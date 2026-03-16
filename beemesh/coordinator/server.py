@@ -30,6 +30,9 @@ Request flow:
 """
 
 import os
+import json
+from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -58,6 +61,8 @@ WORKER_AUTH_TOKEN = os.getenv("BEEMESH_WORKER_TOKEN", "")
 CLIENT_AUTH_TOKEN = os.getenv("BEEMESH_CLIENT_TOKEN", WORKER_AUTH_TOKEN)
 DEFAULT_LEASE_TIMEOUT_S = int(os.getenv("BEEMESH_LEASE_TIMEOUT", "30"))
 DEFAULT_WORKER_TIMEOUT_S = int(os.getenv("BEEMESH_WORKER_TIMEOUT", "60"))
+RESULTS_DIR = Path(os.getenv("BEEMESH_RESULTS_DIR", "server_results"))
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # simple job tracking in memory for v0
 job_submitted = 0
@@ -65,6 +70,7 @@ job_submitted = 0
 # Job tracking structures
 jobs: Dict[str, Dict[str, Any]] = {}
 task_to_job: Dict[str, str] = {}
+job_result_roots: Dict[str, Path] = {}
 
 
 def require_worker_auth(token: Optional[str]) -> None:
@@ -80,6 +86,43 @@ def require_client_auth(token: Optional[str]) -> None:
     if CLIENT_AUTH_TOKEN and token != CLIENT_AUTH_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid client auth token")
 
+
+def persist_result(
+    task_id: str,
+    worker_id: str,
+    job_id: Optional[str],
+    result: Dict[str, Any],
+    result_root: Path,
+) -> str:
+    """Persist a task result on the Hive filesystem and return its path."""
+
+    job_dir = result_root / (job_id or "standalone")
+    job_dir.mkdir(parents=True, exist_ok=True)
+    result_path = job_dir / f"{task_id}.json"
+    payload = {
+        "task_id": task_id,
+        "worker_id": worker_id,
+        "job_id": job_id,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+        "result": result,
+    }
+    result_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return str(result_path)
+
+
+def resolve_results_root(results_subdir: Optional[str]) -> Path:
+    """Resolve a job-specific result root within the Hive workspace."""
+
+    if not results_subdir:
+        return RESULTS_DIR
+
+    candidate = Path(results_subdir)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise HTTPException(status_code=400, detail="Invalid results_subdir path.")
+
+    resolved = (Path.cwd() / candidate).resolve()
+    return resolved
+
 # --------------------------------------------------
 # Worker registration
 # --------------------------------------------------
@@ -94,6 +137,8 @@ def register_worker(req: WorkerRegister):
         cpu_cores=req.cpu_cores,
         ram_gb=req.ram_gb,
         gpu=req.gpu,
+        gpu_memory_gb=req.gpu_memory_gb,
+        architecture=req.architecture,
     )
 
     return WorkerRegisterResponse(worker_id=worker_id)
@@ -137,9 +182,20 @@ def submit_result(res: TaskResult):
     """A Bee (worker) returns a completed task."""
 
     require_worker_auth(res.auth_token)
-    state.store_result(res.worker_id, res.task_id, res.result)
-
     job_id = task_to_job.get(res.task_id)
+    result_root = job_result_roots.get(job_id, RESULTS_DIR)
+    result_file = persist_result(
+        res.task_id,
+        res.worker_id,
+        job_id,
+        res.result,
+        result_root,
+    )
+    enriched_result = dict(res.result)
+    enriched_result["__beemesh_result_file__"] = result_file
+    enriched_result["__beemesh_worker_id__"] = res.worker_id
+    enriched_result["__beemesh_job_id__"] = job_id
+    state.store_result(res.worker_id, res.task_id, enriched_result)
 
     if job_id and job_id in jobs:
         jobs[job_id]["tasks_completed"] += 1
@@ -155,7 +211,7 @@ def submit_result(res: TaskResult):
 def submit_job(job: JobSubmit):
     """Submit a new job to the hive."""
 
-    global job_submitted, jobs, task_to_job
+    global job_submitted, jobs, task_to_job, job_result_roots
     require_client_auth(job.auth_token)
 
     job_submitted += 1
@@ -222,6 +278,12 @@ def submit_job(job: JobSubmit):
                             "blocks_x": blocks_x,
                             "blocks_y": blocks_y,
                         },
+                        "requirements": {
+                            "preferred_device": "cpu",
+                            "min_cpu_cores": 1,
+                            "min_ram_gb": max(0.25, round((bx_size * by_size * 4) / (1024**3), 3)),
+                            "estimated_cost": max(1.0, round((bx_size * by_size * max(steps, 1)) / 500000.0, 2)),
+                        },
                     }
 
                     tasks.append(task)
@@ -233,12 +295,17 @@ def submit_job(job: JobSubmit):
                 detail=f"Unsupported job type: {job_type}",
             )
 
+    result_root = resolve_results_root(job.payload.get("results_subdir"))
+    job_result_roots[job_id] = result_root
+
     jobs[job_id] = {
         "tasks_total": len(tasks),
         "tasks_completed": 0,
+        "results_root": str(result_root),
     }
 
     for task in tasks:
+        task.setdefault("requirements", {})
 
         task_to_job[task["task_id"]] = job_id
         state.add_task(task)

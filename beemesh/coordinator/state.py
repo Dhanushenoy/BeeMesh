@@ -29,6 +29,7 @@ import time
 from collections import deque
 from typing import Any, Deque, Dict, Optional
 
+from beemesh.coordinator.scheduler import schedule
 
 
 class HiveState:
@@ -65,6 +66,8 @@ class HiveState:
         cpu_cores: int = 1,
         ram_gb: float = 0.0,
         gpu: Optional[str] = None,
+        gpu_memory_gb: float = 0.0,
+        architecture: Optional[str] = None,
     ) -> str:
 
         self.worker_counter += 1
@@ -75,18 +78,41 @@ class HiveState:
             "cpu_cores": cpu_cores,
             "ram_gb": ram_gb,
             "gpu": gpu,
+            "gpu_memory_gb": gpu_memory_gb,
+            "architecture": architecture,
             "last_seen": time.time(),
             "status": "alive",
+            "performance_score": self._estimate_performance_score(
+                cpu_cores=cpu_cores,
+                ram_gb=ram_gb,
+                gpu=gpu,
+                gpu_memory_gb=gpu_memory_gb,
+            ),
         }
 
         self.worker_active_tasks[worker_id] = 0
 
         print(
             f"[Hive] Registered {worker_id} "
-            f"(CPU={cpu_cores}, RAM={ram_gb}GB, GPU={gpu})"
+            f"(CPU={cpu_cores}, RAM={ram_gb}GB, GPU={gpu}, "
+            f"GPU_MEM={gpu_memory_gb}GB, ARCH={architecture})"
         )
 
         return worker_id
+
+    def _estimate_performance_score(
+        self,
+        cpu_cores: int,
+        ram_gb: float,
+        gpu: Optional[str],
+        gpu_memory_gb: float,
+    ) -> float:
+        """Estimate a coarse worker strength score for scheduling."""
+
+        score = max(cpu_cores, 1) * 1.0 + max(ram_gb, 0.0) * 0.1
+        if gpu:
+            score += 8.0 + max(gpu_memory_gb, 0.0) * 0.5
+        return round(score, 2)
 
     # -------------------------
     # Task scheduling
@@ -121,10 +147,9 @@ class HiveState:
         if active >= max_tasks:
             return None
 
-        if not self.task_queue:
+        task = schedule(self.task_queue, worker_id, worker, active)
+        if task is None:
             return None
-
-        task = self.task_queue.popleft()
         leased_at = time.time()
 
         self.worker_active_tasks[worker_id] += 1

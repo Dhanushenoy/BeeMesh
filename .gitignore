@@ -38,3 +38,7 @@ dist/
 # Temporary files
 *.tmp
 *.swp
+
+# Example generated data
+examples/*/data/
+examples/*/server_results/
