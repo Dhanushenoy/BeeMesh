@@ -95,3 +95,24 @@ def test_executable_batch_task_runs_uploaded_script_cases():
     assert result["cases_processed"] == 2
     assert result["outputs"][0]["stdout"].strip() == "case:1"
     assert result["outputs"][1]["stdout"].strip() == "case:2"
+
+
+def test_executable_batch_task_supports_single_run_without_case_argument():
+    script = "\n".join(
+        [
+            "#!/bin/sh",
+            "echo 'hello from beemesh'",
+        ]
+    )
+    payload = {
+        "executable_name": "hello.sh",
+        "executable_blob_b64": base64.b64encode(script.encode("utf-8")).decode("ascii"),
+        "cases": [None],
+    }
+
+    result = run_executable_batch_task(payload)
+
+    assert result["success"] is True
+    assert result["cases_processed"] == 1
+    assert result["outputs"][0]["case"] is None
+    assert result["outputs"][0]["stdout"].strip() == "hello from beemesh"

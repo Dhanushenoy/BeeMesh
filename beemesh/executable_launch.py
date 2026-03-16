@@ -13,7 +13,7 @@ from pathlib import Path
 import platform
 import re
 import time
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 import uuid
 
 from beemesh.launch import preflight_worker_fit
@@ -25,7 +25,7 @@ CASE_PATTERN = re.compile(
 NUMERIC_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 
-def _build_batches(cases: List[int], workers: Dict[str, Dict[str, object]]) -> List[List[int]]:
+def _build_batches(cases: List[Any], workers: Dict[str, Dict[str, object]]) -> List[List[Any]]:
     active_workers = [
         info for info in workers.values() if info.get("status", "alive") == "alive"
     ]
@@ -64,6 +64,16 @@ def _parse_sweep(spec: str) -> List[int]:
     return list(range(start, end, step))
 
 
+def _results_subdir_for_executable(executable: Path) -> str:
+    """Return a repo-relative server_results path for an executable launch."""
+
+    repo_root = Path(__file__).resolve().parent.parent
+    try:
+        return str(executable.parent.relative_to(repo_root) / "server_results")
+    except ValueError:
+        return ""
+
+
 def _extract_points(task_results: Dict[str, Dict[str, object]]):
     points = []
     for task_id in sorted(task_results):
@@ -97,7 +107,7 @@ def _extract_points(task_results: Dict[str, Dict[str, object]]):
 
 def launch_executable(
     executable_path: str,
-    sweep: str,
+    sweep: Optional[str],
     hive_url: str,
     auth_token: str,
     wait_interval: float = 2.0,
@@ -110,7 +120,7 @@ def launch_executable(
     if not executable.is_file():
         raise ValueError(f"Expected a file path for executable: {executable}")
 
-    cases = _parse_sweep(sweep)
+    cases = _parse_sweep(sweep) if sweep is not None else [None]
     if not cases:
         print("Sweep produced no cases. Nothing to launch.")
         return
@@ -130,12 +140,7 @@ def launch_executable(
     batches = _build_batches(cases, workers)
     launch_id = uuid.uuid4().hex[:8]
 
-    try:
-        results_subdir = str(
-            executable.parent.relative_to(Path.cwd().resolve()) / "server_results"
-        )
-    except ValueError:
-        results_subdir = ""
+    results_subdir = _results_subdir_for_executable(executable)
 
     arch = platform.machine() or None
     tasks = []
@@ -176,7 +181,10 @@ def launch_executable(
     print("Launch response:")
     print(submit_response.json())
     print(f"Executable: {executable}")
-    print(f"Sweep: {sweep}")
+    if sweep is None:
+        print("Mode: single-run (no sweep)")
+    else:
+        print(f"Sweep: {sweep}")
     print(f"Dispatched across {len(active_workers)} bee(s).")
     _print_monitor_hint(hive_url)
 

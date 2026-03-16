@@ -21,7 +21,7 @@ from typing import Any, Dict
 
 
 def run_executable_batch_task(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Run a shipped executable once per assigned case value."""
+    """Run a shipped executable once per assigned case value or in single-run mode."""
 
     executable_name = payload.get("executable_name", "beemesh_exec")
     executable_blob_b64 = payload.get("executable_blob_b64", "")
@@ -40,8 +40,11 @@ def run_executable_batch_task(payload: Dict[str, Any]) -> Dict[str, Any]:
         exec_path.chmod(exec_path.stat().st_mode | stat.S_IEXEC)
 
         for case in cases:
+            argv = [os.fspath(exec_path)]
+            if case is not None:
+                argv.append(str(case))
             completed = subprocess.run(
-                [os.fspath(exec_path), str(case)],
+                argv,
                 capture_output=True,
                 text=True,
                 timeout=120,

@@ -130,12 +130,15 @@ def launch_executable_sweep(
     auth_token=DEFAULT_AUTH_TOKEN,
     wait_interval=2.0,
 ):
-    """Launch a native executable over a scalar sweep."""
+    """Launch a native executable once or over a scalar sweep."""
     from beemesh.executable_launch import launch_executable
 
     banner()
     print(f"Launching executable {executable_path} via BeeMesh")
-    print(f"Sweep: {sweep}")
+    if sweep is None:
+        print("Mode: single-run (no sweep)")
+    else:
+        print(f"Sweep: {sweep}")
     print(f"Hive URL: {hive_url}")
     launch_executable(executable_path, sweep, hive_url, auth_token, wait_interval)
 
@@ -157,10 +160,6 @@ def launch_target(
             launch_python_script(target_path, hive_url, auth_token, wait_interval, live)
             return
 
-        if sweep is None:
-            raise SystemExit(
-                "Executable launches require `--sweep start:end[:step]`."
-            )
         launch_executable_sweep(target_path, sweep, hive_url, auth_token, wait_interval)
     except FileNotFoundError as exc:
         raise SystemExit(str(exc))
