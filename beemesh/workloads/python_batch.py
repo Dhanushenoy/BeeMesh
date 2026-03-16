@@ -1,8 +1,16 @@
 """
 BeeMesh Python batch workload.
 
-Executes a batch of cases by replaying the script prelude and loop body shipped
-by ``beemesh --launch``.
+Executes one batch from ``beemesh launch script.py``.
+
+The launcher ships three pieces of code/data to the worker:
+- the script prelude that prepares imports and shared state
+- the loop target and loop body extracted from ``beemesh.parallel()`` /
+  ``beemesh.swarm()``
+- a concrete list of case values assigned to this worker batch
+
+The worker replays the prelude once, executes the loop body for each assigned
+case, and returns captured stdout/stderr plus a success flag.
 """
 
 import contextlib
@@ -13,7 +21,7 @@ from typing import Any, Dict
 
 
 def run_python_batch_task(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute a Python loop body against a remote batch of case values."""
+    """Execute a shipped Python loop body against a remote batch of cases."""
 
     script_path = payload.get("script_path", "<beemesh-script>")
     prelude_source = payload.get("prelude_source", "")

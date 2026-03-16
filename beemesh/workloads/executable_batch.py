@@ -1,5 +1,12 @@
 """
-BeeMesh workload for running shipped native executables over a case sweep.
+BeeMesh workload for distributed executable sweeps.
+
+The Hive ships an uploaded native executable plus a batch of scalar case values.
+The worker materializes the executable in a temporary directory, runs it once
+per case, and returns stdout/stderr and exit status for each invocation.
+
+This path assumes the executable is compatible with the worker's operating
+system and architecture.
 """
 
 from __future__ import annotations
@@ -14,7 +21,7 @@ from typing import Any, Dict
 
 
 def run_executable_batch_task(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Run an uploaded executable once per scalar case value."""
+    """Run a shipped executable once per assigned case value."""
 
     executable_name = payload.get("executable_name", "beemesh_exec")
     executable_blob_b64 = payload.get("executable_blob_b64", "")

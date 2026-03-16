@@ -483,7 +483,7 @@ def _launch_grid_script(
                 tasks.append(
                     {
                         "task_id": task_id,
-                        "task_type": "advection_tile",
+                        "task_type": "pde_timestep_tile",
                         "payload": {
                             "step_index": step_index,
                             "tile_x": tile_x,

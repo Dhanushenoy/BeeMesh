@@ -32,6 +32,12 @@ dependencies = [
     "numpy",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "httpx",
+]
+
 [project.scripts]
 beemesh = "beemesh.cli.cli:main"
 bee-mesh = "beemesh.cli.cli:main"

@@ -1,8 +1,16 @@
 r"""
 BeeMesh Protocol Models
 
-These Pydantic models define the JSON messages exchanged between
-the hive coordinator and worker bees.
+Pydantic schemas for the JSON messages exchanged between the Hive,
+Bee workers, and job-submitting clients.
+
+The protocol covers:
+- worker registration, heartbeats, task requests, and result submission
+- Hive-to-worker task assignment messages
+- client job submission requests
+
+Auth tokens are optional at the schema level because Hive auth is
+runtime-configurable; a deployed Hive may still require them.
 
 Protocol flow:
 
@@ -40,7 +48,7 @@ from pydantic import BaseModel
 # --------------------------------------------------
 
 class WorkerRegister(BaseModel):
-    """Worker registration request"""
+    """Worker registration request sent by a Bee to the Hive."""
 
     hostname: str
     cpu_cores: int
@@ -76,7 +84,7 @@ class Heartbeat(BaseModel):
 
 
 class Task(BaseModel):
-    """Message sent by the Hive to assign a task to a worker."""
+    """Task assignment sent by the Hive to a worker."""
 
     task_id: str
     task_type: str
@@ -96,7 +104,7 @@ class TaskResponse(BaseModel):
 # --------------------------------------------------
 
 class TaskResult(BaseModel):
-    """Result submitted by a worker after completing a task."""
+    """Completed task result submitted by a worker."""
 
     worker_id: str
     task_id: str
@@ -109,7 +117,7 @@ class TaskResult(BaseModel):
 # --------------------------------------------------
 
 class JobSubmit(BaseModel):
-    """Client request to submit a new job to the Hive."""
+    """Client request to submit a job to the Hive."""
 
     job_type: str
     payload: Dict[str, Any]

@@ -1,231 +1,311 @@
 # BeeMesh
+![PyPI](https://img.shields.io/pypi/v/bee-mesh)
+![Python](https://img.shields.io/pypi/pyversions/bee-mesh)
+![License](https://img.shields.io/github/license/Dhanushenoy/BeeMesh)
+![Tests](https://img.shields.io/github/actions/workflow/status/Dhanushenoy/BeeMesh/tests.yml?label=tests)
 
-**BeeMesh** is a lightweight volunteer distributed computing framework designed for scientific workloads. It allows a central **Hive coordinator** to distribute work across multiple **Bee workers** running on heterogeneous machines such as laptops, desktops, or clusters.
+*A lightweight distributed computing framework for scientific workloads across heterogeneous machines.*
 
-The goal of BeeMesh is to make it easy to execute distributed scientific simulations without complex cluster infrastructure.
+BeeMesh enables Python scripts and external executables (e.g., C, C++, or Fortran programs) to run across multiple machines with minimal setup.
 
-# Installation
+A central **Hive coordinator** distributes tasks to connected **Bee workers**, allowing researchers to execute simulations, parameter sweeps, and numerical experiments across laptops, desktops, clusters, or remote machines.
 
-BeeMesh is available on PyPI:
+---
+
+## Core Idea
+
+BeeMesh follows a simple **Hive–Bee** architecture:
+
+```text
+           +------------------+
+           |       Hive       |
+           |   Task Queue     |
+           +------------------+
+              ↑            ↑
+           request      request
+              |            |
+          +-------+    +-------+
+          | Bee 1 |    | Bee 2 |
+          +-------+    +-------+
+              |            |
+           execute      execute
+              |            |
+           result       result
+              └──submit_result──► Hive
+```
+
+The Hive acts as the central coordinator and scheduler. Each Bee periodically requests available work, executes its assigned task, and returns the results to the Hive.
+
+This model allows BeeMesh to run across a single machine, a local network, or multiple remote machines connected through VPN or public networking.
+
+## Installation
+BeeMesh requires Python 3.9 or newer.
+
+Install from PyPI:
 
 ```bash
-pip install beemesh
+pip install bee-mesh
 ```
 
----
+Or install from source:
 
-# Core Idea
+```bash
+git clone https://github.com/Dhanushenoy/BeeMesh.git
+cd BeeMesh
 
-A central **Hive** manages a queue of tasks. Worker nodes called **Bees** connect to the Hive, request work, execute tasks, and return results.
+python -m venv .venv
+source .venv/bin/activate
 
-```
-                +------------------+
-                |     BeeMesh      |
-                |       Hive       |
-                |   Task Queue     |
-                +------------------+
-                    ↑            ↑
-                request        request
-                    |            |
-                +-------+     +-------+
-                | Bee1  |     | Bee2  |
-                +-------+     +-------+
-                    |             |
-                execute        execute
-                    |             |
-                result         result
-            └──────submit_result──────┘
+pip install -e .
 ```
 
-Whichever worker asks first receives the next available task.
+It is recommended to use a virtual environment.
 
----
+Verify the installation:
 
-# Architecture
-
-BeeMesh consists of three main components:
-
-### Hive (Coordinator)
-
-The Hive is a FastAPI server responsible for:
-
-- worker registration
-- job submission
-- task queue management
-- result collection
-- cluster monitoring
-
-### Bees (Workers)
-
-Workers connect to the Hive and continuously request tasks using **long polling**.
-
-```
-                +------------------+
-                |      BeeMesh     |
-                |       Hive       |
-                |    Task Queue    |
-                +------------------+
-                   ▲            ▲
-                   │            │
-              long poll    long poll
-                   │            │
-              +--------+   +--------+
-              | Bee 1  |   | Bee 2  |
-              +--------+   +--------+
-                   │            │
-                execute      execute
-                   │            │
-                   └──submit_result──► Hive
+```bash
+beemesh --help
 ```
 
-### Client
+## Testing
 
-A client submits a high‑level job to the Hive. The Hive decomposes the job into smaller tasks that can be executed in parallel.
+Install the test dependencies:
 
-```
-                Client
-                  │
-                  │ submit_job (global simulation)
-                  ▼
-          +---------------------+
-          |      BeeMesh Hive   |
-          |  job decomposition  |
-          +---------------------+
-                    │
-                    │ create tasks
-                    ▼
-                 Task Queue
-                    │
-             ┌──────┴──────┐
-             │             │
-           Bee1           Bee2
-             │             │
-           compute       compute
-             │             │
-             └──submit_result──► Hive
+```bash
+pip install -e '.[test]'
 ```
 
----
+If installing from PyPI instead of source:
 
-# Features
+```bash
+pip install 'bee-mesh[test]'
+```
 
-- Lightweight distributed task execution
-- Worker capability reporting (CPU, RAM)
-- Automatic job decomposition
-- Live cluster monitoring via CLI
-- Progress bars for job execution
-- Cluster throughput metrics
+Run the test suite:
 
----
+```bash
+python -m pytest tests/
+```
 
-# Example CLI Usage
+Detailed test coverage notes are available in [docs/testing.md](docs/testing.md).
+
+## Quick Start
+
+### Local Single-Machine Run
+
+The explicit flags below are optional and shown for clarity. By default, the Hive starts on `127.0.0.1:8000`, and a Bee connects to that local address automatically. Authentication is mainly needed for remote or multi-machine deployments; the local quick-start below uses the default local setup.
 
 Start the Hive:
 
-```
+```bash
 beemesh hive
 ```
 
-Start workers:
+Equivalent explicit form:
 
-```
-beemesh bee --hostname worker1
-beemesh bee --hostname worker2
-```
-
-Submit a distributed diffusion job:
-
-```
-beemesh submit-diffusion --nx 512 --ny 512 --blocks-x 4 --blocks-y 4
+```bash
+beemesh hive --host 127.0.0.1 --port 8000
 ```
 
-Monitor the cluster:
+Start a Bee worker in another terminal:
 
-```
-beemesh monitor
+```bash
+beemesh bee
 ```
 
-Launch a Python script that uses `with beemesh.parallel():`:
+Equivalent explicit form:
+
+```bash
+beemesh bee --hostname local-bee --hive-url http://127.0.0.1:8000
+```
+
+BeeMesh can automatically distribute independent loop iterations across connected workers:
 
 ```python
 import beemesh
 
-cases = [1, 2, 3, 4]
+cases = range(100)
 
 with beemesh.parallel():
     for case in cases:
         print(case)
 ```
 
+BeeMesh will detect the parallel loop, split the workload, and dispatch batches across available Bee workers.
+
 ```bash
-beemesh --launch examples/parallel_sweep_test/launch.py --hive-url http://127.0.0.1:8000 --auth-token <client-token>
+beemesh launch examples/parallel_sweep_test/launch.py --hive-url http://127.0.0.1:8000
 ```
 
-See [launch.py](/Users/dhanush/Codes/beemesh/examples/parallel_sweep_test/launch.py) for a complete runnable sweep example.
-For a parameter sweep / Monte Carlo style launch, see [launch.py](/Users/dhanush/Codes/beemesh/examples/monte_carlo_test/launch.py).
-For a simple neural-network hyperparameter search, see [launch.py](/Users/dhanush/Codes/beemesh/examples/nn_hyperparam_test/launch.py).
-For a tiled Mandelbrot fractal render, see [launch.py](/Users/dhanush/Codes/beemesh/examples/mandelbrot_test/launch.py).
-For a coupled 2D advection wave with ghost exchange each Euler step, see [launch.py](/Users/dhanush/Codes/beemesh/examples/advection_grid_test/launch.py).
-For a compiled C++ executable sweep, build [simulate_case.cpp](/Users/dhanush/Codes/beemesh/examples/cpp_exec_test/simulate_case.cpp) and run `beemesh launch ./simulate_case --sweep 0:1000`.
-These launch examples define `beemesh_finalize(...)`, so BeeMesh can generate plots automatically after remote execution finishes.
-If you want standalone post-processing, see [visualize.py](/Users/dhanush/Codes/beemesh/examples/parallel_sweep_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/monte_carlo_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/nn_hyperparam_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/mandelbrot_test/visualize.py), [visualize.py](/Users/dhanush/Codes/beemesh/examples/advection_grid_test/visualize.py), and [visualize.py](/Users/dhanush/Codes/beemesh/examples/cpp_exec_test/visualize.py).
+### Multi-Machine Run over VPN
 
----
+BeeMesh can also run across multiple machines as long as all workers can reach the Hive.
 
-# Multi-Machine Launch
+**Example: Remote Execution over VPN**
 
-BeeMesh can run across multiple machines as long as every worker can reach the
-Hive. `127.0.0.1` only works when the Hive and worker are on the same machine.
+In testing, BeeMesh was successfully run over Tailscale between two machines located in different countries.
 
-Start the Hive on the coordinator machine:
+On the Hive machine:
 
-```
+```bash
 export BEEMESH_WORKER_TOKEN="shared-worker-token"
 export BEEMESH_CLIENT_TOKEN="shared-client-token"
 beemesh hive --host 0.0.0.0 --port 8000
 ```
 
-Same LAN:
+On a remote Bee machine connected through Tailscale:
 
-```
-beemesh bee --hostname worker-a --hive-url http://192.168.1.10:8000 --auth-token shared-worker-token
-beemesh submit-diffusion --nx 512 --ny 512 --blocks-x 4 --blocks-y 4 --hive-url http://192.168.1.10:8000 --auth-token shared-client-token
-```
-
-Different networks with a public IP or VPS:
-
-```
-beemesh bee --hostname worker-a --hive-url http://<public-ip>:8000 --auth-token shared-worker-token
-beemesh submit-diffusion --nx 512 --ny 512 --blocks-x 4 --blocks-y 4 --hive-url http://<public-ip>:8000 --auth-token shared-client-token
+```bash
+export BEEMESH_AUTH_TOKEN="shared-worker-token"
+beemesh bee --hostname remote-bee --hive-url http://100.x.y.z:8000
 ```
 
-Different networks with Tailscale:
+Launch a job from the Hive machine or any authorized client:
 
+```bash
+beemesh launch examples/parallel_sweep_test/launch.py --hive-url http://100.x.y.z:8000 --auth-token shared-client-token
 ```
-beemesh bee --hostname worker-a --hive-url http://100.x.y.z:8000 --auth-token shared-worker-token
-beemesh submit-diffusion --nx 512 --ny 512 --blocks-x 4 --blocks-y 4 --hive-url http://100.x.y.z:8000 --auth-token shared-client-token
+
+Replace `100.x.y.z` with the Tailscale IP address of the Hive machine.
+
+### Monitoring
+
+To monitor the Hive while jobs are running:
+
+```bash
+beemesh monitor --hive-url http://127.0.0.1:8000
 ```
 
-BeeMesh uses worker heartbeats and leased tasks, so unfinished work can be
-requeued when a remote worker disappears.
+For remote runs, replace the Hive URL with the Tailscale address.
 
-Completed task results are stored on the Hive under `server_results/<job_id>/`
-by default. You can change that location with `BEEMESH_RESULTS_DIR`.
+## Core Features
 
----
+BeeMesh supports several distributed workload patterns:
 
-# Project Vision
+- **Python loop distribution** via `beemesh.parallel()` or `beemesh.swarm()`, allowing independent cases in a Python script to be automatically dispatched across connected Bee workers.
+
+- **Executable sweeps** for compiled binaries (e.g., C, C++, or Fortran programs), enabling existing simulation codes to run across multiple machines without modification.
+
+- **Capability-aware scheduling** using worker metadata such as CPU cores, RAM, GPU availability, and architecture.
+
+- **Heterogeneous multi-machine execution**, allowing workloads to run across laptops, desktops, and remote machines connected through LAN, VPN, or the public internet.
+
+- **Experimental coupled-grid PDE execution**, demonstrated by a 2D advection example using tiled domain decomposition with ghost-cell exchange between subdomains.
+
+- **Lightweight deployment**, requiring only a central Hive coordinator and Bee workers, without dedicated cluster infrastructure.
+
+## Execution Models
+
+BeeMesh currently supports three main execution styles:
+
+- **Python launch mode** via `beemesh launch script.py`, where BeeMesh parses a Python script containing `with beemesh.parallel():` or `with beemesh.swarm():` and distributes independent loop iterations across workers.
+- **Executable launch mode** via `beemesh launch <executable> --sweep ...`, where a compiled binary is distributed and executed across workers for a parameter sweep.
+- **Experimental grid mode** via `with beemesh.parallel(grid=u):`, where a structured 2D field is partitioned into tiles and advanced using a coupled ghost-exchange workflow.
+
+In general:
+
+- Use `parallel()` / `swarm()` for embarrassingly parallel Python workloads.
+- Use `launch <executable>` for existing compiled simulation codes.
+- Use the grid mode only for the current experimental PDE demonstrations.
+
+## Current Limitations
+
+BeeMesh is still an early-stage research software prototype. Important current limitations include:
+
+- The coupled-grid PDE support is experimental and currently implemented only for the included 2D advection example.
+- GPU-aware scheduling depends on worker GPU detection, which is still minimal.
+- The Hive stores state in memory, so a restart will lose active job state.
+- Some job bookkeeping still lives in the API layer; moving job metadata into a dedicated Hive state/store layer remains a future refactor.
+- The distributed PDE path currently uses Hive-mediated synchronization rather than persistent long-running subdomain workers.
+- Security and authentication are lightweight and intended for controlled environments, not hardened public deployment.
+- The executable launch path assumes workers are compatible with the uploaded binary's operating system and architecture.
+
+## Example Workloads
+
+The repository includes several runnable examples:
+- Parallel sweep test — simple distributed Python loop execution
+- Monte Carlo test — distributed Monte Carlo / parameter sweep workflow
+- Neural network hyperparameter search — distributed training runs across workers
+- Mandelbrot test — tiled fractal rendering distributed across Bees
+- 2D advection grid test — experimental structured-grid PDE execution with ghost-cell exchange
+- C++ executable test — distributed sweep of a compiled executable across multiple workers
+
+```text
+examples/parallel_sweep_test
+examples/monte_carlo_test
+examples/nn_hyperparam_test
+examples/mandelbrot_test
+examples/advection_grid_test
+examples/cpp_exec_test
+```
+
+Example commands:
+
+```bash
+beemesh launch examples/parallel_sweep_test/launch.py
+beemesh launch examples/monte_carlo_test/launch.py
+beemesh launch examples/nn_hyperparam_test/launch.py
+beemesh launch examples/mandelbrot_test/launch.py --live
+beemesh launch examples/advection_grid_test/launch.py
+beemesh launch ./examples/cpp_exec_test/simulate_case --sweep 0:1000
+```
+
+## Executing External Programs
+
+BeeMesh can also distribute compiled executables across workers.
+
+For example, after building a C++ program such as simulate_case, BeeMesh can distribute a parameter sweep across multiple machines:
+
+```bash
+beemesh launch ./examples/cpp_exec_test/simulate_case --sweep 0:1000
+```
+
+This allows existing scientific programs written in C, C++, or Fortran to run on BeeMesh without rewriting them in Python.
+
+## Fault Tolerance and Result Handling
+
+BeeMesh uses worker heartbeats and leased tasks, so unfinished work can be requeued when a worker disconnects or becomes unavailable.
+
+Completed task results are stored on the Hive under:
+
+```text
+server_results/<job_id>/
+```
+
+The results directory can be changed using:
+
+```text
+BEEMESH_RESULTS_DIR
+```
+
+Many included examples also define `beemesh_finalize(...)` hooks for automatic result collection, plotting, and post-processing after remote execution completes.
+
+## Project Vision
 
 BeeMesh aims to provide a simple framework for:
 
 - distributed scientific simulations
 - volunteer computing
 - heterogeneous cluster execution
+- lightweight multi-machine experimentation
 
-Future work includes support for **domain‑decomposed PDE solvers**, enabling distributed simulations across many machines.
+Future development directions include:
 
----
+- more advanced domain-decomposed PDE solvers
+- improved GPU-aware scheduling
+- larger-scale volunteer computing deployments
+- richer distributed numerical workloads
 
-# License
+## Related Projects
 
-MIT License
+BeeMesh shares goals with other distributed computing frameworks:
+
+- **Ray** – distributed Python execution
+- **Dask** – parallel computing for Python
+- **BOINC** – large-scale volunteer computing
+
+BeeMesh focuses on lightweight deployment and simple distribution of scientific workloads across heterogeneous machines.
+
+## License
+
+BeeMesh is released under the MIT License.

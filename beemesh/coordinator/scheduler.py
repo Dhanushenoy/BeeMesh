@@ -1,14 +1,18 @@
 """
 BeeMesh Scheduler
 
-Responsible for deciding which task should be given to a worker.
-This version performs simple capability-aware matching based on
-CPU, RAM, GPU, and current worker load.
+Selects the next task for a worker using a small set of explicit heuristics:
+- hard requirement filtering for CPU, RAM, GPU, architecture, and target worker
+- worker strength scoring based on available resources and current load
+- scarcity-aware prioritization so specialized tasks are consumed by the bees
+  that can actually run them
+- bounded age-based priority to reduce starvation of older queued tasks
 """
 
 from __future__ import annotations
 
-from typing import Any, Deque, Dict, Optional
+import time
+from typing import Any, Deque, Dict, Mapping, Optional
 
 
 def _task_requirements(task: Dict[str, Any]) -> Dict[str, Any]:
@@ -24,12 +28,12 @@ def worker_can_run_task(
 ) -> bool:
     """Return True when the worker satisfies the task's hard requirements."""
 
+    if worker.get("status") != "alive":
+        return False
+
     requirements = _task_requirements(task)
     if not requirements:
         return True
-
-    if worker.get("status") != "alive":
-        return False
 
     target_worker_id = requirements.get("target_worker_id")
     if target_worker_id and worker_id != target_worker_id:
@@ -68,6 +72,7 @@ def score_worker_for_task(
 
     requirements = _task_requirements(task)
 
+    # Prefer stronger, less-loaded workers while keeping the heuristic simple.
     score = 0.0
     score += float(worker.get("cpu_cores", 1) or 1) * 1.5
     score += float(worker.get("ram_gb", 0.0) or 0.0) * 0.35
@@ -89,17 +94,45 @@ def score_worker_for_task(
     return score
 
 
+def eligible_worker_count(
+    workers: Mapping[str, Dict[str, Any]],
+    task: Dict[str, Any],
+) -> int:
+    """Count how many alive workers can satisfy a task."""
+
+    return sum(
+        1
+        for worker_id, worker in workers.items()
+        if worker_can_run_task(worker, task, worker_id=worker_id)
+    )
+
+
+def age_priority_bonus(task: Dict[str, Any], now: Optional[float] = None) -> float:
+    """Return a bounded score bonus for older queued tasks."""
+
+    enqueued_at = task.get("enqueued_at")
+    if enqueued_at is None:
+        return 0.0
+
+    current_time = time.time() if now is None else now
+    age_s = max(0.0, current_time - float(enqueued_at))
+    # Gradually lift older tasks without overwhelming capability matching.
+    return min(age_s / 15.0, 6.0)
+
+
 def schedule(
     task_queue: Deque[Dict[str, Any]],
     worker_id: str,
     worker: Dict[str, Any],
     active_tasks: int = 0,
+    workers: Optional[Mapping[str, Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Return and remove the best task for the given worker."""
 
     if not task_queue:
         return None
 
+    now = time.time()
     best_index = None
     best_score = None
     for index, task in enumerate(task_queue):
@@ -107,6 +140,13 @@ def schedule(
             continue
 
         score = score_worker_for_task(worker, active_tasks, task)
+        score += age_priority_bonus(task, now=now)
+        if workers:
+            eligible_workers = eligible_worker_count(workers, task)
+            # Scarce tasks should be consumed by the smaller pool of bees that
+            # can actually run them before a generic worker grabs them.
+            if eligible_workers > 0:
+                score += 12.0 / eligible_workers
         if best_score is None or score > best_score:
             best_score = score
             best_index = index

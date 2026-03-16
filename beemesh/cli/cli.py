@@ -7,17 +7,19 @@ Examples:
 
     beemesh hive
     beemesh bee --hostname laptop
-    beemesh submit-diffusion --nx 512 --ny 512 --blocks-x 4 --blocks-y 4
     beemesh status
-    beemesh --launch code.py
+    beemesh launch code.py
+    beemesh launch ./simulate_case --sweep 0:1000
 """
 
 import argparse
+import json
 import os
 import sys
 
 from beemesh.version import __version__
 
+# These are for convenience so users can set env vars instead of passing CLI args repeatedly. They have no effect on the Hive or Bee servers themselves, only the CLI defaults.
 DEFAULT_AUTH_TOKEN = os.getenv("BEEMESH_AUTH_TOKEN", "")
 DEFAULT_HIVE_URL = os.getenv("BEEMESH_HIVE_URL", "http://127.0.0.1:8000")
 
@@ -38,17 +40,38 @@ def supports_unicode_output() -> bool:
 def banner():
     print(
         r"""
-   ____               __  ___           __
-  / __ )___  ___     /  |/  /___  _____/ /_
- / __  / _ \/ _ \   / /|_/ / __ \/ ___/ __ \
-/ /_/ /  __/  __/  / /  / /  _/ (__  ) / / /
-\____/\___/\___/  /_/  /_/\____/____/_/ /_/
-
+                                                       
+                                
+▗▄▄         ▗  ▖        ▐   
+▐  ▌ ▄▖  ▄▖ ▐▌▐▌ ▄▖  ▄▖ ▐▗▖ 
+▐▄▄▘▐▘▐ ▐▘▐ ▐▐▌▌▐▘▐ ▐ ▝ ▐▘▐ 
+▐  ▌▐▀▀ ▐▀▀ ▐▝▘▌▐▀▀  ▀▚ ▐ ▐ 
+▐▄▄▘▝▙▞ ▝▙▞ ▐  ▌▝▙▞ ▝▄▞ ▐ ▐                                                                 
+   /_/_      .'''.      .''.   ..   . 
+=O(_)))) ...'     `.  .'    '.'  '.'
+   \_\              ``
+                        
 BeeMesh - Distributed Volunteer Computing Framework
 """
     )
 
-
+def banner_redacted():
+    print(
+        r"""
+______            ___  ___          _     
+| ___ \           |  \/  |         | |    
+| |_/ / ___  ___  | .  . | ___  ___| |__  
+| ___ \/ _ \/ _ \ | |\/| |/ _ \/ __| '_ \ 
+| |_/ /  __/  __/ | |  | |  __/\__ \ | | |
+\____/ \___|\___| \_|  |_/\___||___/_| |_|
+    _
+   /_/_      .'''.      .''.   ..   . 
+=O(_)))) ...'     `.  .'    '.'  '.'
+   \_\              ``
+                        
+BeeMesh - Distributed Volunteer Computing Framework
+"""
+    )
 def run_hive(host="127.0.0.1", port=8000):
     """Start the BeeMesh Hive (FastAPI server)."""
     import uvicorn
@@ -84,38 +107,6 @@ def run_bee(
         print("Error: Could not connect to Hive. Is it running?")
 
 
-def submit_diffusion(
-    nx,
-    ny,
-    blocks_x,
-    blocks_y,
-    steps,
-    alpha,
-    hive_url,
-    auth_token=DEFAULT_AUTH_TOKEN,
-):
-    """Submit a diffusion job to the Hive."""
-    import requests
-
-    payload = {
-        "job_type": "diffusion",
-        "payload": {
-            "nx": nx,
-            "ny": ny,
-            "blocks_x": blocks_x,
-            "blocks_y": blocks_y,
-            "steps": steps,
-            "alpha": alpha,
-        },
-        "auth_token": auth_token,
-    }
-
-    r = requests.post(f"{hive_url}/submit_job", json=payload)
-
-    print("\nJob submission response:")
-    print(r.json())
-
-
 def launch_python_script(
     script_path,
     hive_url=DEFAULT_HIVE_URL,
@@ -149,7 +140,34 @@ def launch_executable_sweep(
     launch_executable(executable_path, sweep, hive_url, auth_token, wait_interval)
 
 
-def show_status(hive_url):
+def launch_target(
+    target_path,
+    sweep=None,
+    hive_url=DEFAULT_HIVE_URL,
+    auth_token=DEFAULT_AUTH_TOKEN,
+    wait_interval=2.0,
+    live=False,
+):
+    """Autodetect Python script vs executable launch mode."""
+
+    try:
+        if target_path.endswith(".py"):
+            if sweep is not None:
+                raise SystemExit("`--sweep` is only valid for executable launches.")
+            launch_python_script(target_path, hive_url, auth_token, wait_interval, live)
+            return
+
+        if sweep is None:
+            raise SystemExit(
+                "Executable launches require `--sweep start:end[:step]`."
+            )
+        launch_executable_sweep(target_path, sweep, hive_url, auth_token, wait_interval)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc))
+    except RuntimeError as exc:
+        raise SystemExit(str(exc))
+
+def show_status(hive_url, as_json=False):
     """Query Hive status."""
     import requests
 
@@ -160,6 +178,10 @@ def show_status(hive_url):
         return
 
     data = r.json()
+    if as_json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return
+
     workers = data.get("workers", {})
     jobs = data.get("jobs", {})
 
@@ -208,7 +230,7 @@ def show_status(hive_url):
 
 # Progress bar helper for jobs
 def progress_bar(done, total, width=20):
-    """Render a simple ASCII progress bar."""
+    """Render a simple progress bar with ASCII fallback when Unicode is unavailable."""
     if not total:
         return "[no tasks]"
 
@@ -365,33 +387,34 @@ def main():
     bee_cmd.add_argument("--auth-token", default=DEFAULT_AUTH_TOKEN)
     bee_cmd.add_argument("--heartbeat-interval", type=float, default=10.0)
 
-    # Submit diffusion job
-    submit_cmd = sub.add_parser("submit-diffusion", help="Submit a diffusion job")
-    submit_cmd.add_argument("--nx", type=int, default=256)
-    submit_cmd.add_argument("--ny", type=int, default=256)
-    submit_cmd.add_argument("--blocks-x", type=int, default=4)
-    submit_cmd.add_argument("--blocks-y", type=int, default=4)
-    submit_cmd.add_argument("--steps", type=int, default=2000)
-    submit_cmd.add_argument("--alpha", type=float, default=0.1)
-    submit_cmd.add_argument("--hive-url", default=DEFAULT_HIVE_URL)
-    submit_cmd.add_argument("--auth-token", default=DEFAULT_AUTH_TOKEN)
-
     # Status command
     status_cmd = sub.add_parser("status", help="Show Hive status")
     status_cmd.add_argument("--hive-url", default=DEFAULT_HIVE_URL)
+    status_cmd.add_argument("--json", action="store_true", help="Print raw status as JSON")
 
     # Monitor command
     monitor_cmd = sub.add_parser("monitor", help="Live Hive monitor")
     monitor_cmd.add_argument("--hive-url", default=DEFAULT_HIVE_URL)
     monitor_cmd.add_argument("--interval", type=int, default=2)
 
-    # Executable sweep command
-    launch_cmd = sub.add_parser("launch", help="Launch a native executable sweep")
-    launch_cmd.add_argument("executable_path")
-    launch_cmd.add_argument("--sweep", required=True, help="start:end or start:end:step")
+    # Unified launch command
+    launch_cmd = sub.add_parser(
+        "launch",
+        help="Autodetect and launch a Python script or native executable",
+    )
+    launch_cmd.add_argument("target_path")
+    launch_cmd.add_argument(
+        "--sweep",
+        help="Executable mode only: start:end or start:end:step",
+    )
     launch_cmd.add_argument("--hive-url", default=DEFAULT_HIVE_URL)
     launch_cmd.add_argument("--auth-token", default=DEFAULT_AUTH_TOKEN)
     launch_cmd.add_argument("--wait-interval", type=float, default=2.0)
+    launch_cmd.add_argument(
+        "--live",
+        action="store_true",
+        help="Python mode only: enable live updates for examples that support it",
+    )
 
     args = parser.parse_args()
 
@@ -410,31 +433,20 @@ def main():
             args.heartbeat_interval,
         )
 
-    elif args.command == "submit-diffusion":
-        submit_diffusion(
-            args.nx,
-            args.ny,
-            args.blocks_x,
-            args.blocks_y,
-            args.steps,
-            args.alpha,
-            args.hive_url,
-            args.auth_token,
-        )
-
     elif args.command == "status":
-        show_status(args.hive_url)
+        show_status(args.hive_url, args.json)
 
     elif args.command == "monitor":
         monitor_hive(args.hive_url, args.interval)
 
     elif args.command == "launch":
-        launch_executable_sweep(
-            args.executable_path,
+        launch_target(
+            args.target_path,
             args.sweep,
             args.hive_url,
             args.auth_token,
             args.wait_interval,
+            args.live,
         )
 
 

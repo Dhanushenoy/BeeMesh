@@ -1,12 +1,14 @@
 r"""
 BeeMesh Task Executor
 
-Routes incoming tasks to the appropriate workload implementation.
-Workloads are registered in a simple registry mapping task_type -> function.
+Worker-side dispatch layer for BeeMesh task execution.
+
+The Bee receives generic task dictionaries from the Hive. This module maps the
+task's ``task_type`` to a local workload implementation and executes it using
+the task payload. New built-in workload types are registered here.
 """
 
-from beemesh.workloads.advection_tile import run_advection_tile_task
-from beemesh.workloads.diffusion import run_diffusion_task
+from beemesh.workloads.pde_timestep_tile import run_pde_timestep_tile_task
 from beemesh.workloads.executable_batch import run_executable_batch_task
 from beemesh.workloads.python_batch import run_python_batch_task
 
@@ -15,8 +17,7 @@ from beemesh.workloads.python_batch import run_python_batch_task
 # -------------------------------------------------
 
 WORKLOAD_REGISTRY = {
-    "advection_tile": run_advection_tile_task,
-    "diffusion": run_diffusion_task,
+    "pde_timestep_tile": run_pde_timestep_tile_task,
     "executable_batch": run_executable_batch_task,
     "python_batch": run_python_batch_task,
 }

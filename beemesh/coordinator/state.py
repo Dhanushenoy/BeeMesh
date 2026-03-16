@@ -2,8 +2,13 @@ r"""
 BeeMesh Hive State
 
 In-memory coordinator state for the BeeMesh runtime.
-This module tracks which bees are known to the hive, which task cells
-are waiting to be assigned, and which results have already been stored.
+
+This module owns the core Hive-side runtime data structures:
+- registered workers and their liveness metadata
+- queued tasks waiting to be leased
+- leased tasks and their timeout metadata
+- completed task results
+- worker load counters used by the scheduler
 
 State view:
 
@@ -147,7 +152,13 @@ class HiveState:
         if active >= max_tasks:
             return None
 
-        task = schedule(self.task_queue, worker_id, worker, active)
+        task = schedule(
+            self.task_queue,
+            worker_id,
+            worker,
+            active,
+            workers=self.workers,
+        )
         if task is None:
             return None
         leased_at = time.time()
@@ -171,6 +182,15 @@ class HiveState:
         return self.lease_task(worker_id)
 
     def add_task(self, task: Dict[str, Any]) -> None:
+        task_id = task.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise ValueError("Task must include a valid 'task_id'.")
+        if task_id in self.results or task_id in self.leased_tasks:
+            raise ValueError(f"Task '{task_id}' already exists in Hive state.")
+        if any(queued_task.get("task_id") == task_id for queued_task in self.task_queue):
+            raise ValueError(f"Task '{task_id}' is already queued.")
+
+        task.setdefault("enqueued_at", time.time())
         self.task_queue.append(task)
 
     def requeue_expired_tasks(self) -> int:
@@ -238,6 +258,15 @@ class HiveState:
     # -------------------------
 
     def store_result(self, worker_id: str, task_id: str, result: Any) -> None:
+        """Store a completed result and release the corresponding lease."""
+
+        lease = self.leased_tasks.get(task_id)
+        if lease is None:
+            raise ValueError(f"Task '{task_id}' is not currently leased.")
+        if lease["worker_id"] != worker_id:
+            raise ValueError(
+                f"Task '{task_id}' is leased to '{lease['worker_id']}', not '{worker_id}'."
+            )
 
         self.results[task_id] = result
         self.leased_tasks.pop(task_id, None)

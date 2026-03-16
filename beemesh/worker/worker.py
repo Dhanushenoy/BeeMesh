@@ -1,8 +1,11 @@
 r"""
 BeeMesh Worker (Bee)
 
-A Bee registers with the Hive, pulls task cells from the Hive, executes them,
-and submits results back to the colony.
+Runtime loop for a Bee worker.
+
+A Bee registers with the Hive, reports basic hardware capabilities, polls for
+leased tasks, executes them locally, sends heartbeats while running, and
+submits results back to the coordinator.
 
 Honeybee taking a task:
         _  _
@@ -24,6 +27,7 @@ import os
 import platform
 import threading
 import time
+import traceback
 
 import requests
 
@@ -209,12 +213,18 @@ class BeeWorker:
 
             if task is None:
                 time.sleep(2)
-                print(f"[{self.worker_id}] No tasks received after waiting, retrying...")
                 continue
 
             print(f"[{self.worker_id}] Running task {task['task_id']}")
 
-            result = execute_task(task)
+            try:
+                result = execute_task(task)
+            except Exception as exc:
+                result = {
+                    "success": False,
+                    "error": str(exc),
+                    "traceback": traceback.format_exc(),
+                }
             for attempt in range(5):
                 try:
                     self.submit_result(task["task_id"], result)

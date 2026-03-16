@@ -1,10 +1,15 @@
 """
-BeeMesh Workload Base Class
+Minimal workload interface for built-in BeeMesh task handlers.
+
+Most current workloads are simple functions registered in the worker executor.
+This base class remains as a small placeholder for future class-based workload
+implementations.
 """
+
 
 class Workload:
     """
-    Base class for all BeeMesh workloads.
+    Minimal interface for a class-based workload implementation.
     """
 
     name = "base"

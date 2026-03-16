@@ -1,5 +1,11 @@
 """
-BeeMesh workload for one Euler step of 2D linear advection on a tile.
+BeeMesh workload for one PDE timestep on a ghosted tile.
+
+This is the worker-side kernel used by the experimental structured-grid PDE
+path. The Hive/client sends one tile that already includes ghost cells plus the
+numerical parameters for a single explicit timestep. The worker advances only
+the tile interior and returns the updated interior values and simple summary
+statistics.
 """
 
 from __future__ import annotations
@@ -9,8 +15,8 @@ from typing import Any, Dict
 import numpy as np
 
 
-def run_advection_tile_task(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Advance one tiled field block by one forward-Euler advection step."""
+def run_pde_timestep_tile_task(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Advance one ghosted tile by one forward-Euler advection step."""
 
     tile = np.asarray(payload["tile"], dtype=np.float64)
     c_x = float(payload["c_x"])

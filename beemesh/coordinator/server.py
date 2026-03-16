@@ -1,8 +1,13 @@
 r"""
 BeeMesh Hive Server
 
-FastAPI server acting as the BeeMesh coordinator (Hive).
-Workers (Bees) register with the Hive, request tasks, and submit results.
+FastAPI coordinator for the BeeMesh Hive.
+
+This module provides the worker- and client-facing API surface:
+- worker registration, heartbeats, task leasing, and result submission
+- client job submission for pre-decomposed task batches
+- per-job result persistence on the Hive filesystem
+- status and result endpoints for monitoring and launch-side polling
 
 Server bootstrap and API surface:
 
@@ -123,6 +128,54 @@ def resolve_results_root(results_subdir: Optional[str]) -> Path:
     resolved = (Path.cwd() / candidate).resolve()
     return resolved
 
+
+def validate_tasks_payload(tasks: Any) -> None:
+    """Validate manually submitted task payloads before queueing them."""
+
+    if not isinstance(tasks, list) or not tasks:
+        raise HTTPException(status_code=400, detail="'tasks' must be a non-empty list.")
+
+    seen_task_ids = set()
+    for index, task in enumerate(tasks):
+        if not isinstance(task, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task at index {index} must be an object.",
+            )
+
+        task_id = task.get("task_id")
+        task_type = task.get("task_type")
+        payload = task.get("payload")
+        requirements = task.get("requirements", {})
+
+        if not isinstance(task_id, str) or not task_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task at index {index} is missing a valid 'task_id'.",
+            )
+        if task_id in seen_task_ids or task_id in task_to_job:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Duplicate task_id '{task_id}' in submitted job.",
+            )
+        seen_task_ids.add(task_id)
+
+        if not isinstance(task_type, str) or not task_type:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task '{task_id}' is missing a valid 'task_type'.",
+            )
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task '{task_id}' must include an object 'payload'.",
+            )
+        if requirements is not None and not isinstance(requirements, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task '{task_id}' has invalid 'requirements'.",
+            )
+
 # --------------------------------------------------
 # Worker registration
 # --------------------------------------------------
@@ -182,6 +235,17 @@ def submit_result(res: TaskResult):
     """A Bee (worker) returns a completed task."""
 
     require_worker_auth(res.auth_token)
+    lease = state.leased_tasks.get(res.task_id)
+    if lease is None:
+        if res.task_id in state.results:
+            raise HTTPException(status_code=409, detail="Task result already submitted.")
+        raise HTTPException(status_code=404, detail="Task is not currently leased.")
+    if lease["worker_id"] != res.worker_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Task is leased to a different worker.",
+        )
+
     job_id = task_to_job.get(res.task_id)
     result_root = job_result_roots.get(job_id, RESULTS_DIR)
     result_file = persist_result(
@@ -218,82 +282,17 @@ def submit_job(job: JobSubmit):
     job_id = f"job_{job_submitted}"
 
     tasks = job.payload.get("tasks")
+    if tasks is not None:
+        validate_tasks_payload(tasks)
 
-    # Automatic job decomposition
     if tasks is None:
-
-        job_type = job.job_type
-        payload = job.payload
-
-        if job_type == "diffusion":
-
-            nx = payload.get("nx")
-            ny = payload.get("ny")
-            if nx is None or ny is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Diffusion jobs require 'nx' and 'ny' in the payload.",
-                )
-
-            blocks_x = payload.get("blocks_x", 1)
-            blocks_y = payload.get("blocks_y", 1)
-            if blocks_x <= 0 or blocks_y <= 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail="'blocks_x' and 'blocks_y' must be positive integers.",
-                )
-            if nx <= 0 or ny <= 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail="'nx' and 'ny' must be positive integers.",
-                )
-            if nx < blocks_x or ny < blocks_y:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Grid dimensions must be at least as large as the block counts.",
-                )
-
-            steps = payload.get("steps", 100)
-            alpha = payload.get("alpha", 0.1)
-
-            tasks = []
-            task_id_counter = 0
-
-            bx_size = nx // blocks_x
-            by_size = ny // blocks_y
-
-            for bx in range(blocks_x):
-                for by in range(blocks_y):
-
-                    task = {
-                        "task_id": f"{job_id}_task_{task_id_counter}",
-                        "task_type": "diffusion",
-                        "payload": {
-                            "nx": bx_size,
-                            "ny": by_size,
-                            "steps": steps,
-                            "alpha": alpha,
-                            "block_x": bx,
-                            "block_y": by,
-                            "blocks_x": blocks_x,
-                            "blocks_y": blocks_y,
-                        },
-                        "requirements": {
-                            "preferred_device": "cpu",
-                            "min_cpu_cores": 1,
-                            "min_ram_gb": max(0.25, round((bx_size * by_size * 4) / (1024**3), 3)),
-                            "estimated_cost": max(1.0, round((bx_size * by_size * max(steps, 1)) / 500000.0, 2)),
-                        },
-                    }
-
-                    tasks.append(task)
-                    task_id_counter += 1
-
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported job type: {job_type}",
-            )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Jobs must include an explicit 'tasks' list. "
+                "Built-in automatic decomposition is no longer provided by the Hive."
+            ),
+        )
 
     result_root = resolve_results_root(job.payload.get("results_subdir"))
     job_result_roots[job_id] = result_root
@@ -322,9 +321,15 @@ def submit_job(job: JobSubmit):
 # --------------------------------------------------
 
 @app.get("/results")
-def get_results():
+def get_results(job_id: Optional[str] = None):
     """Return all stored task results from the Hive."""
 
+    if job_id is not None:
+        return {
+            task_id: result
+            for task_id, result in state.results.items()
+            if task_to_job.get(task_id) == job_id
+        }
     return state.results
 
 
