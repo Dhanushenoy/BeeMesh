@@ -40,17 +40,17 @@ def supports_unicode_output() -> bool:
 def banner():
     print(
         r"""
-                                                       
-                                
-▗▄▄         ▗  ▖        ▐   
-▐  ▌ ▄▖  ▄▖ ▐▌▐▌ ▄▖  ▄▖ ▐▗▖ 
-▐▄▄▘▐▘▐ ▐▘▐ ▐▐▌▌▐▘▐ ▐ ▝ ▐▘▐ 
-▐  ▌▐▀▀ ▐▀▀ ▐▝▘▌▐▀▀  ▀▚ ▐ ▐ 
-▐▄▄▘▝▙▞ ▝▙▞ ▐  ▌▝▙▞ ▝▄▞ ▐ ▐                                                                 
-   /_/_      .'''.      .''.   ..   . 
+
+
+▗▄▄         ▗  ▖        ▐
+▐  ▌ ▄▖  ▄▖ ▐▌▐▌ ▄▖  ▄▖ ▐▗▖
+▐▄▄▘▐▘▐ ▐▘▐ ▐▐▌▌▐▘▐ ▐ ▝ ▐▘▐
+▐  ▌▐▀▀ ▐▀▀ ▐▝▘▌▐▀▀  ▀▚ ▐ ▐
+▐▄▄▘▝▙▞ ▝▙▞ ▐  ▌▝▙▞ ▝▄▞ ▐ ▐
+   /_/_      .'''.      .''.   ..   .
 =O(_)))) ...'     `.  .'    '.'  '.'
    \_\              ``
-                        
+
 BeeMesh - Distributed Volunteer Computing Framework
 """
     )
@@ -58,17 +58,17 @@ BeeMesh - Distributed Volunteer Computing Framework
 def banner_redacted():
     print(
         r"""
-______            ___  ___          _     
-| ___ \           |  \/  |         | |    
-| |_/ / ___  ___  | .  . | ___  ___| |__  
-| ___ \/ _ \/ _ \ | |\/| |/ _ \/ __| '_ \ 
+______            ___  ___          _
+| ___ \           |  \/  |         | |
+| |_/ / ___  ___  | .  . | ___  ___| |__
+| ___ \/ _ \/ _ \ | |\/| |/ _ \/ __| '_ \
 | |_/ /  __/  __/ | |  | |  __/\__ \ | | |
 \____/ \___|\___| \_|  |_/\___||___/_| |_|
     _
-   /_/_      .'''.      .''.   ..   . 
+   /_/_      .'''.      .''.   ..   .
 =O(_)))) ...'     `.  .'    '.'  '.'
    \_\              ``
-                        
+
 BeeMesh - Distributed Volunteer Computing Framework
 """
     )
@@ -161,10 +161,8 @@ def launch_target(
             return
 
         launch_executable_sweep(target_path, sweep, hive_url, auth_token, wait_interval)
-    except FileNotFoundError as exc:
-        raise SystemExit(str(exc))
-    except RuntimeError as exc:
-        raise SystemExit(str(exc))
+    except Exception as _:
+        raise SystemExit("Error: Failed to launch target. Check that the path is correct and the Hive is running.")
 
 def show_status(hive_url, as_json=False):
     """Query Hive status."""
