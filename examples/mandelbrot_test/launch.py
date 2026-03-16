@@ -100,7 +100,7 @@ def run_tile(case):
 
 
 def beemesh_task_requirements(batch):
-    """Prefer GPU-capable bees for Mandelbrot tiles."""
+    """Prefer GPU-capable bees for Mandelbrot tiles, but allow CPU fallback."""
 
     total_pixels = sum(
         (item["x1"] - item["x0"]) * (item["y1"] - item["y0"]) for item in batch
@@ -109,10 +109,8 @@ def beemesh_task_requirements(batch):
     estimated_cost = max(2.0, round(total_pixels * max_iter / 250000.0, 2))
     return {
         "preferred_device": "gpu",
-        "requires_gpu": True,
         "min_cpu_cores": 1,
         "min_ram_gb": 0.5,
-        "min_gpu_memory_gb": 1.0,
         "estimated_cost": estimated_cost,
     }
 

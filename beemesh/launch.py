@@ -382,6 +382,17 @@ def _wait_for_task_results(
     return completed_results
 
 
+def _results_subdir_for_script(script_path: str) -> str:
+    """Return a repo-relative server_results path for a launched script."""
+
+    repo_root = Path(__file__).resolve().parent.parent
+    script_dir = Path(script_path).resolve().parent
+    try:
+        return str(script_dir.relative_to(repo_root) / "server_results")
+    except ValueError:
+        return ""
+
+
 def _launch_grid_script(
     spec: ParallelSpec,
     launch_context: LaunchContext,
@@ -435,13 +446,7 @@ def _launch_grid_script(
     dy = float(launch_context.namespace["dy"])
     dt = float(launch_context.namespace["dt"])
 
-    script_dir = Path(script_path).resolve().parent
-    try:
-        results_subdir = str(
-            script_dir.relative_to(Path.cwd().resolve()) / "server_results"
-        )
-    except ValueError:
-        results_subdir = ""
+    results_subdir = _results_subdir_for_script(script_path)
 
     if weighted_strips is not None:
         x_parts = [(x0, x1) for _, x0, x1 in weighted_strips]
@@ -631,17 +636,22 @@ def launch_script(
     import requests
 
     spec = extract_parallel_spec(script_path)
+
+    try:
+        status_response = requests.get(f"{hive_url}/status", timeout=30)
+        status_response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Could not reach the Hive at {hive_url}.") from exc
+
+    workers = status_response.json().get("workers", {})
+    if not workers:
+        raise RuntimeError("No workers are registered with the Hive.")
+
     launch_context = _load_cases(script_path, spec)
     cases = launch_context.cases
     if not cases:
         print("No cases found in the parallel iterable. Nothing to launch.")
         return
-
-    status_response = requests.get(f"{hive_url}/status", timeout=30)
-    status_response.raise_for_status()
-    workers = status_response.json().get("workers", {})
-    if not workers:
-        raise RuntimeError("No workers are registered with the Hive.")
 
     if "grid" in spec.parallel_kwargs:
         _launch_grid_script(
@@ -660,13 +670,7 @@ def launch_script(
         for worker_id, info in workers.items()
         if info.get("status", "alive") == "alive"
     ]
-    script_dir = Path(script_path).resolve().parent
-    try:
-        results_subdir = str(
-            script_dir.relative_to(Path.cwd().resolve()) / "server_results"
-        )
-    except ValueError:
-        results_subdir = ""
+    results_subdir = _results_subdir_for_script(script_path)
 
     batches = _build_batches(cases, workers)
     launch_id = uuid.uuid4().hex[:8]

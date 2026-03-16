@@ -1,6 +1,6 @@
 # BeeMesh
 ![PyPI](https://img.shields.io/pypi/v/bee-mesh)
-![Python](https://img.shields.io/pypi/pyversions/bee-mesh)
+![Python](https://img.shields.io/badge/python-%3E%3D3.9-blue)
 ![License](https://img.shields.io/github/license/Dhanushenoy/BeeMesh)
 ![Tests](https://img.shields.io/github/actions/workflow/status/Dhanushenoy/BeeMesh/tests.yml?label=tests)
 
@@ -31,6 +31,7 @@ BeeMesh follows a simple **Hive–Bee** architecture:
            execute      execute
               |            |
            result       result
+              |            |
               └──submit_result──► Hive
 ```
 
@@ -119,7 +120,7 @@ Equivalent explicit form:
 beemesh bee --hostname local-bee --hive-url http://127.0.0.1:8000
 ```
 
-BeeMesh can automatically distribute independent loop iterations across connected workers:
+BeeMesh can automatically distribute **independent** loop iterations across connected workers:
 
 ```python
 import beemesh
@@ -143,7 +144,7 @@ BeeMesh can also run across multiple machines as long as all workers can reach t
 
 **Example: Remote Execution over VPN**
 
-In testing, BeeMesh was successfully run over Tailscale between two machines located in different countries.
+In testing, BeeMesh was successfully run over [Tailscale](https://tailscale.com) between two machines located in different countries.
 
 On the Hive machine:
 
@@ -264,7 +265,7 @@ This allows existing scientific programs written in C, C++, or Fortran to run on
 
 ## Fault Tolerance and Result Handling
 
-BeeMesh uses worker heartbeats and leased tasks, so unfinished work can be requeued when a worker disconnects or becomes unavailable.
+BeeMesh uses worker **heartbeats** and leased tasks, so unfinished work can be requeued when a worker disconnects or becomes unavailable.
 
 Completed task results are stored on the Hive under:
 
