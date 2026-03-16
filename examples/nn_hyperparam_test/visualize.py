@@ -2,7 +2,7 @@
 Visualize results produced by ``examples/nn_hyperparam_test/launch.py``.
 
 Usage:
-    python examples/nn_hyperparam_test/visualize.py --results-dir server_results
+    python examples/nn_hyperparam_test/visualize.py
 """
 
 import argparse
@@ -16,6 +16,7 @@ PATTERN = re.compile(
     r"epochs=(?P<epochs>\d+)\s+val_acc=(?P<acc>[-+]?\d+(?:\.\d+)?)\s+val_loss=(?P<loss>[-+]?\d+(?:\.\d+)?)"
 )
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent / "data" / "nn_hyperparam_search.json"
+DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "server_results"
 
 
 def parse_stdout(stdout: str):
@@ -100,7 +101,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Visualize BeeMesh neural-network sweep outputs."
     )
-    parser.add_argument("--results-dir", default="server_results")
+    parser.add_argument("--results-dir", default=str(DEFAULT_RESULTS_DIR))
     parser.add_argument("--data-file", default=str(DEFAULT_DATA_FILE))
     parser.add_argument("--output", default=str(Path(__file__).resolve().parent / "nn_hyperparam_search.png"))
     args = parser.parse_args()

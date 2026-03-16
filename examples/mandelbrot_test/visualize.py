@@ -13,6 +13,7 @@ from pathlib import Path
 PREFIX = "TILE_JSON "
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent / "data" / "mandelbrot_tiles.json"
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "mandelbrot.png"
+DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "server_results"
 
 
 def parse_stdout(stdout: str):
@@ -104,7 +105,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Visualize BeeMesh Mandelbrot tile outputs."
     )
-    parser.add_argument("--results-dir", default="server_results")
+    parser.add_argument("--results-dir", default=str(DEFAULT_RESULTS_DIR))
     parser.add_argument("--data-file", default=str(DEFAULT_DATA_FILE))
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     args = parser.parse_args()

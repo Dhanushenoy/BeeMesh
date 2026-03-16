@@ -2,7 +2,7 @@
 Visualize results produced by ``examples/monte_carlo_test/launch.py``.
 
 Usage:
-    python examples/monte_carlo_test/visualize.py --results-dir server_results
+    python examples/monte_carlo_test/visualize.py
 """
 
 import argparse
@@ -16,6 +16,7 @@ PATTERN = re.compile(
     r"sigma=(?P<sigma>[-+]?\d+(?:\.\d+)?)\s+estimate=(?P<estimate>[-+]?\d+(?:\.\d+)?)"
 )
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent / "data" / "monte_carlo_sweep.json"
+DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "server_results"
 
 
 def parse_stdout(stdout: str):
@@ -83,7 +84,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Visualize BeeMesh Monte Carlo sweep outputs."
     )
-    parser.add_argument("--results-dir", default="server_results")
+    parser.add_argument("--results-dir", default=str(DEFAULT_RESULTS_DIR))
     parser.add_argument("--data-file", default=str(DEFAULT_DATA_FILE))
     parser.add_argument("--output", default=str(Path(__file__).resolve().parent / "monte_carlo_sweep.png"))
     args = parser.parse_args()
