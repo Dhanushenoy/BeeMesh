@@ -5,6 +5,7 @@ Usage:
     beemesh --launch examples/mandelbrot_test/launch.py --hive-url http://127.0.0.1:8000 --auth-token <client-token>
 """
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -115,16 +116,25 @@ def beemesh_task_requirements(batch):
     }
 
 
-def _render_tiles(task_results, output_path: Path):
-    from examples.mandelbrot_test.visualize import (
-        extract_tiles_from_task_results,
-        render_plot,
-    )
+def _load_visualize_module():
+    """Load the sibling visualize module without depending on repo import paths."""
 
-    tiles = extract_tiles_from_task_results(task_results)
+    module_path = Path(__file__).resolve().parent / "visualize.py"
+    spec = importlib.util.spec_from_file_location("beemesh_mandelbrot_visualize", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load visualize module from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _render_tiles(task_results, output_path: Path):
+    visualize = _load_visualize_module()
+
+    tiles = visualize.extract_tiles_from_task_results(task_results)
     if not tiles:
         return None, 0
-    final_path = render_plot(tiles, output_path)
+    final_path = visualize.render_plot(tiles, output_path)
     return final_path, len(tiles)
 
 
@@ -137,24 +147,20 @@ def beemesh_live_update(results_dir=None, task_results=None, pending_tasks=None)
     scenario_dir = Path(__file__).resolve().parent
     preview_path = scenario_dir / "mandelbrot_live.png"
     try:
-        from examples.mandelbrot_test.visualize import (
-            assemble_image,
-            extract_tiles_from_task_results,
-            render_plot,
-        )
+        visualize = _load_visualize_module()
     except ImportError:
         return
 
-    tiles = extract_tiles_from_task_results(task_results)
+    tiles = visualize.extract_tiles_from_task_results(task_results)
     if not tiles:
         return
 
-    image, _, _, _ = assemble_image(tiles)
+    image, _, _, _ = visualize.assemble_image(tiles)
 
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        final_path = render_plot(tiles, preview_path)
+        final_path = visualize.render_plot(tiles, preview_path)
     else:
         plt.ion()
         fig = _LIVE_PREVIEW_STATE["fig"]
@@ -206,13 +212,14 @@ def beemesh_finalize(results_dir=None, task_results=None):
     raw_results_path.write_text(json.dumps(task_results, indent=2), encoding="utf-8")
 
     try:
-        from examples.mandelbrot_test.visualize import extract_tiles_from_task_results
+        visualize = _load_visualize_module()
     except ImportError:
         if results_dir is not None:
             print(f"Hive result files: {results_dir}")
+        print("Could not load Mandelbrot visualization helpers.")
         return
 
-    tiles = extract_tiles_from_task_results(task_results)
+    tiles = visualize.extract_tiles_from_task_results(task_results)
     if not tiles:
         print("No Mandelbrot tile payloads were found in the returned task results.")
         return

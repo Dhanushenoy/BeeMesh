@@ -5,6 +5,7 @@ Usage:
     beemesh --launch examples/advection_grid_test/launch.py --hive-url http://127.0.0.1:8000 --auth-token <client-token>
 """
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -33,6 +34,18 @@ dt = 0.25 * min(dx / max(abs(c_x), 1e-8), dy / max(abs(c_y), 1e-8))
 
 beemesh_grid_workload = "advection2d"
 beemesh_snapshot_interval = max(1, steps // 10)
+
+
+def _load_visualize_module():
+    """Load the sibling visualize module without depending on repo import paths."""
+
+    module_path = Path(__file__).resolve().parent / "visualize.py"
+    spec = importlib.util.spec_from_file_location("beemesh_advection_visualize", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load visualize module from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def beemesh_finalize(
@@ -71,7 +84,7 @@ def beemesh_finalize(
     partitions_path.write_text(json.dumps(tile_partitions or {}, indent=2), encoding="utf-8")
 
     try:
-        from examples.advection_grid_test.visualize import render_field, render_gif
+        visualize = _load_visualize_module()
     except ImportError:
         if results_dir is not None:
             print(f"Hive result files: {results_dir}")
@@ -85,7 +98,7 @@ def beemesh_finalize(
 
     for index, frame in enumerate(frame_snapshots or []):
         frame_file = frames_dir / f"frame_{index:03d}.png"
-        render_field(
+        visualize.render_field(
             np.asarray(frame["field"]),
             frame_file,
             step=frame["step"],
@@ -93,14 +106,14 @@ def beemesh_finalize(
             y_parts=y_parts,
         )
 
-    output_path = render_field(
+    output_path = visualize.render_field(
         np.asarray(final_grid),
         plot_path,
         step=(step_history or [{}])[-1].get("step", 0),
         x_parts=x_parts,
         y_parts=y_parts,
     )
-    gif_output = render_gif(frames_dir, gif_path)
+    gif_output = visualize.render_gif(frames_dir, gif_path)
     if results_dir is not None:
         print(f"Hive result files: {results_dir}")
     print(f"Saved final field to {field_path}")

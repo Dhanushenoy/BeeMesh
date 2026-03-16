@@ -5,6 +5,7 @@ Usage:
     beemesh --launch examples/monte_carlo_test/launch.py --hive-url http://127.0.0.1:8000 --auth-token <client-token>
 """
 
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -51,6 +52,18 @@ def run_case(case):
     )
 
 
+def _load_visualize_module():
+    """Load the sibling visualize module without depending on repo import paths."""
+
+    module_path = Path(__file__).resolve().parent / "visualize.py"
+    spec = importlib.util.spec_from_file_location("beemesh_monte_carlo_visualize", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load visualize module from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def beemesh_finalize(results_dir=None, task_results=None):
     """Generate a quick sweep plot after the remote launch finishes."""
 
@@ -67,21 +80,18 @@ def beemesh_finalize(results_dir=None, task_results=None):
     visualize_script = scenario_dir / "visualize.py"
 
     try:
-        from examples.monte_carlo_test.visualize import (
-            extract_points_from_task_results,
-            render_plot,
-        )
+        visualize = _load_visualize_module()
     except ImportError:
         print(f"Hive result files: {results_dir}")
         return
 
-    points = extract_points_from_task_results(task_results)
+    points = visualize.extract_points_from_task_results(task_results)
     if not points:
         print("No plottable results found in the returned task payloads.")
         return
     raw_results_path.write_text(json.dumps(task_results, indent=2), encoding="utf-8")
     data_path.write_text(json.dumps(points, indent=2), encoding="utf-8")
-    render_plot(points, plot_path)
+    visualize.render_plot(points, plot_path)
     if results_dir is not None:
         print(f"Hive result files: {results_dir}")
     print(f"Saved raw task results to {raw_results_path}")
