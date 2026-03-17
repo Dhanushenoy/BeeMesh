@@ -9,7 +9,10 @@ description = "A lightweight volunteer distributed computing framework for scien
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{name="Dhanush Vittal Shenoy"}]
+authors = [
+    {name="Dhanush Vittal Shenoy"},
+    {name="Dheeraj Vittal Shenoy"},
+]
 requires-python = ">=3.9"
 keywords = ["distributed-computing", "volunteer-computing", "cfd", "scientific-computing", "fastapi"]
 classifiers = [

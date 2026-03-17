@@ -229,6 +229,7 @@ The repository includes several runnable examples:
 - Neural network hyperparameter search — distributed training runs across workers
 - Mandelbrot test — tiled fractal rendering distributed across Bees
 - 2D advection grid test — experimental structured-grid PDE execution with ghost-cell exchange
+- Hello world C++ test — minimal single-run executable launch across workers
 - C++ executable test — distributed sweep of a compiled executable across multiple workers
 
 ```text
@@ -237,6 +238,7 @@ examples/monte_carlo_test
 examples/nn_hyperparam_test
 examples/mandelbrot_test
 examples/advection_grid_test
+examples/hello_world_cpp
 examples/cpp_exec_test
 ```
 
@@ -248,12 +250,21 @@ beemesh launch examples/monte_carlo_test/launch.py
 beemesh launch examples/nn_hyperparam_test/launch.py
 beemesh launch examples/mandelbrot_test/launch.py --live
 beemesh launch examples/advection_grid_test/launch.py
+beemesh launch ./examples/hello_world_cpp/launch.sh
 beemesh launch ./examples/cpp_exec_test/simulate_case --sweep 0:1000
 ```
 
 ## Executing External Programs
 
-BeeMesh can also distribute compiled executables across workers.
+BeeMesh can also distribute compiled executables or executable wrapper scripts across workers.
+
+For a minimal single-run executable example:
+
+```bash
+beemesh launch ./examples/hello_world_cpp/launch.sh
+```
+
+This launches a tiny C++ “Hello, World!” workflow across connected Bees without a parameter sweep.
 
 For example, after building a C++ program such as simulate_case, BeeMesh can distribute a parameter sweep across multiple machines:
 
@@ -306,6 +317,11 @@ BeeMesh shares goals with other distributed computing frameworks:
 - **BOINC** – large-scale volunteer computing
 
 BeeMesh focuses on lightweight deployment and simple distribution of scientific workloads across heterogeneous machines.
+
+## Contributors
+
+- Dhanush Vittal Shenoy
+- Dheeraj Vittal Shenoy
 
 ## License
 
