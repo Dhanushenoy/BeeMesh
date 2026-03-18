@@ -6,6 +6,8 @@
 
 *A lightweight distributed computing framework for scientific workloads across heterogeneous machines.*
 
+BeeMesh is an early-stage research software prototype under active development.
+
 BeeMesh enables Python scripts and external executables (e.g., C, C++, or Fortran programs) to run across multiple machines with minimal setup.
 
 A central **Hive coordinator** distributes tasks to connected **Bee workers**, allowing researchers to execute simulations, parameter sweeps, and numerical experiments across laptops, desktops, clusters, or remote machines.
