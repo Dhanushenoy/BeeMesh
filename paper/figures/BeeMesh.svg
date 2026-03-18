@@ -3,13 +3,13 @@
 
 <svg
    width="260.76849mm"
-   height="126.15088mm"
-   viewBox="0 0 260.76849 126.15088"
+   height="126.15087mm"
+   viewBox="0 0 260.76849 126.15087"
    version="1.1"
    id="svg5"
    inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
    sodipodi:docname="BeeMesh.svg"
-   inkscape:export-filename="../../Codes/beemesh/paper/figures/BeeMesh.svg"
+   inkscape:export-filename="BeeMesh.svg"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -28,14 +28,14 @@
      inkscape:document-units="mm"
      showgrid="true"
      showguides="false"
-     inkscape:zoom="1.7150531"
-     inkscape:cx="664.99399"
-     inkscape:cy="232.93739"
+     inkscape:zoom="1.0666506"
+     inkscape:cx="505.78885"
+     inkscape:cy="317.34852"
      inkscape:window-width="1512"
      inkscape:window-height="921"
      inkscape:window-x="0"
      inkscape:window-y="33"
-     inkscape:window-maximized="1"
+     inkscape:window-maximized="0"
      inkscape:current-layer="layer1">
     <inkscape:grid
        type="xygrid"
@@ -43,27 +43,27 @@
        originx="-50.27084"
        originy="-28.799157" />
     <sodipodi:guide
-       position="124.35416,107.62544"
+       position="124.35416,107.47524"
        orientation="1,0"
        id="guide1589"
        inkscape:locked="false" />
     <sodipodi:guide
-       position="174.62499,73.229596"
+       position="174.62499,73.079396"
        orientation="0,-1"
        id="guide1591"
        inkscape:locked="false" />
     <sodipodi:guide
-       position="227.54165,60.000429"
+       position="227.54165,59.850229"
        orientation="1,0"
        id="guide2398"
        inkscape:locked="false" />
     <sodipodi:guide
-       position="156.10415,107.62543"
+       position="156.10415,107.47523"
        orientation="0,-1"
        id="guide2400"
        inkscape:locked="false" />
     <sodipodi:guide
-       position="158.74999,38.833762"
+       position="158.74999,38.683562"
        orientation="0,-1"
        id="guide2402"
        inkscape:locked="false" />
@@ -132,7 +132,7 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(-50.270833,-29.09955)">
+     transform="translate(-50.270834,-28.949358)">
     <rect
        style="fill:none;stroke:#000000;stroke-width:0.979771;stroke-opacity:1"
        id="rect234"
@@ -267,15 +267,15 @@
        transform="translate(-5.410229,-0.645298)"><tspan
          x="174.96761"
          y="143.78288"
-         id="tspan1030"><tspan
+         id="tspan1138"><tspan
            style="font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono, Normal';fill:#000000;stroke:none;stroke-width:0.9"
-           id="tspan1028">Result
+           id="tspan1136">Result
 </tspan></tspan><tspan
          x="174.96761"
          y="150.10379"
-         id="tspan1034"><tspan
+         id="tspan1142"><tspan
            style="font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono, Normal';fill:#000000;stroke:none;stroke-width:0.9"
-           id="tspan1032">Storage</tspan></tspan></text>
+           id="tspan1140">Storage</tspan></tspan></text>
     <rect
        style="fill:none;stroke:#000000;stroke-width:0.942911;stroke-opacity:1"
        id="rect234-9-3"
@@ -293,9 +293,9 @@
        transform="translate(106.02023,-66.051107)"><tspan
          x="174.96761"
          y="143.78288"
-         id="tspan1038"><tspan
+         id="tspan1146"><tspan
            style="font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono, Normal';fill:#000000;stroke:none;stroke-width:0.9"
-           id="tspan1036">Bee Worker 2</tspan></tspan></text>
+           id="tspan1144">Bee Worker 2</tspan></tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.37254px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:none;stroke:#000000;stroke-width:0.507052;stroke-opacity:1"
@@ -324,9 +324,9 @@
        transform="translate(106.02023,-96.971007)"><tspan
          x="174.96761"
          y="143.78288"
-         id="tspan1042"><tspan
+         id="tspan1150"><tspan
            style="font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono, Normal';fill:#000000;stroke:none;stroke-width:0.9"
-           id="tspan1040">Bee Worker 1</tspan></tspan></text>
+           id="tspan1148">Bee Worker 1</tspan></tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.37254px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:none;stroke:#000000;stroke-width:0.507052;stroke-opacity:1"
@@ -355,9 +355,9 @@
        transform="translate(106.02022,-26.363611)"><tspan
          x="174.96761"
          y="143.78288"
-         id="tspan1046"><tspan
+         id="tspan1154"><tspan
            style="font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono, Normal';fill:#000000;stroke:none;stroke-width:0.9"
-           id="tspan1044">Bee Worker N</tspan></tspan></text>
+           id="tspan1152">Bee Worker N</tspan></tspan></text>
     <rect
        style="fill:none;stroke:#b3b3b3;stroke-width:0.61;stroke-dasharray:0.61, 0.61;stroke-dashoffset:0;stroke-opacity:1"
        id="rect234-9-3-8-2"

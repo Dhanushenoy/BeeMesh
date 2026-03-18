@@ -27,11 +27,6 @@ bibliography: paper.bib
 
 # Summary
 
-<!-- BeeMesh is a lightweight distributed computing framework for scientific
-workloads across heterogeneous machines, without requiring dedicated cluster
-infrastructure or complex deployment. It provides a central coordinator
-("Hive") and connected worker processes ("Bees") that execute submitted tasks
-and return results to the coordinator. -->
 BeeMesh is a lightweight distributed computing framework for scientific workloads across heterogeneous machines. It provides a central coordinator ("Hive") and connected worker processes ("Bees") that execute tasks and return results. BeeMesh targets independent or lightly coupled workloads across heterogeneous machines.
 
 BeeMesh currently supports three execution styles: distributed Python loop
@@ -145,12 +140,3 @@ FastAPI, NumPy, and pytest. The authors also thank **Prof. Steven H. Frankel** f
 helpful discussions and support. The authors acknowledge the use of AI-assisted
 tools for minor code generation, debugging, and documentation drafting; all
 outputs were reviewed and validated by the authors.
-
-<!-- # AI usage disclosure
-
-OpenAI Codex/GPT-based tools were used for limited assistance with minor bug
-fixes, documentation and README editing, and drafting portions of the
-manuscript text. Human authors reviewed, edited, and validated all
-AI-assisted outputs, made the substantive software and manuscript decisions,
-and assume full responsibility for the correctness, originality, licensing,
-and policy compliance of the submission. -->
