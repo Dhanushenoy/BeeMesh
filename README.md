@@ -92,6 +92,11 @@ python -m pytest tests/
 
 Detailed test coverage notes are available in [docs/testing.md](docs/testing.md).
 
+Additional documentation:
+
+- [Deployment guide](docs/deployment.md)
+- [Architecture overview](docs/architecture.md)
+
 ## Quick Start
 
 ### Local Single-Machine Run

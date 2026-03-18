@@ -49,12 +49,19 @@ class BeeWorker:
         hive_url: str = DEFAULT_HIVE_URL,
         auth_token: str = DEFAULT_AUTH_TOKEN,
         heartbeat_interval: float = 10.0,
+        task_poll_interval: float = 1.0,
+        request_timeout: float = 30.0,
+        reconnect_interval: float = 5.0,
     ):
         self.hostname = hostname
         self.hive_url = hive_url.rstrip("/")
         self.auth_token = auth_token
         self.heartbeat_interval = heartbeat_interval
+        self.task_poll_interval = task_poll_interval
+        self.request_timeout = request_timeout
+        self.reconnect_interval = reconnect_interval
         self.worker_id = None
+        self._connection_lost = False
 
     # --------------------------------------------------
     # Capability detection
@@ -104,7 +111,7 @@ class BeeWorker:
                 "architecture": cap["architecture"],
                 "auth_token": self.auth_token,
             },
-            timeout=30,
+            timeout=self.request_timeout,
         )
         r.raise_for_status()
 
@@ -117,12 +124,33 @@ class BeeWorker:
             f"RAM={cap['ram_gb']} GB | GPU={cap['gpu']} | "
             f"GPU_MEM={cap['gpu_memory_gb']} GB | ARCH={cap['architecture']}"
         )
+        self._mark_connection_restored()
+
+    def _mark_connection_lost(self):
+        """Log a connection loss once until Hive communication recovers."""
+
+        if self._connection_lost:
+            return
+        self._connection_lost = True
+        target = self.worker_id or self.hostname
+        print(
+            f"[{target}] Lost connection to Hive at {self.hive_url}. "
+            f"Retrying every {self.reconnect_interval:.1f}s..."
+        )
+
+    def _mark_connection_restored(self):
+        """Log when Hive communication recovers after a failure."""
+
+        if self._connection_lost:
+            target = self.worker_id or self.hostname
+            print(f"[{target}] Reconnected to Hive.")
+        self._connection_lost = False
 
     # --------------------------------------------------
     # Task request (long polling)
     # --------------------------------------------------
 
-    def request_task(self, timeout=30, poll_interval=0.5):
+    def request_task(self, timeout=30):
         """
         Long-poll the Hive for a task.
         The worker keeps asking for a task for up to `timeout` seconds
@@ -138,9 +166,10 @@ class BeeWorker:
                     "worker_id": self.worker_id,
                     "auth_token": self.auth_token,
                 },
-                timeout=30,
+                timeout=self.request_timeout,
             )
             r.raise_for_status()
+            self._mark_connection_restored()
 
             data = r.json()
             task = data.get("task")
@@ -151,7 +180,7 @@ class BeeWorker:
             if time.time() - start_time > timeout:
                 return None
 
-            time.sleep(poll_interval)
+            time.sleep(self.task_poll_interval)
 
     # --------------------------------------------------
     # Submit result
@@ -168,9 +197,10 @@ class BeeWorker:
                 "result": result,
                 "auth_token": self.auth_token,
             },
-            timeout=30,
+            timeout=self.request_timeout,
         )
         response.raise_for_status()
+        self._mark_connection_restored()
 
     def send_heartbeat(self):
         """Tell the Hive that this worker is still alive."""
@@ -184,9 +214,10 @@ class BeeWorker:
                 "worker_id": self.worker_id,
                 "auth_token": self.auth_token,
             },
-            timeout=15,
+            timeout=min(self.request_timeout, 15),
         )
         response.raise_for_status()
+        self._mark_connection_restored()
 
     def _heartbeat_loop(self):
         """Send heartbeats in the background for remote workers."""
@@ -195,7 +226,7 @@ class BeeWorker:
             try:
                 self.send_heartbeat()
             except requests.RequestException:
-                pass
+                self._mark_connection_lost()
             time.sleep(self.heartbeat_interval)
 
     # --------------------------------------------------
@@ -209,7 +240,12 @@ class BeeWorker:
         threading.Thread(target=self._heartbeat_loop, daemon=True).start()
 
         while True:
-            task = self.request_task()
+            try:
+                task = self.request_task(timeout=self.request_timeout)
+            except requests.RequestException:
+                self._mark_connection_lost()
+                time.sleep(self.reconnect_interval)
+                continue
 
             if task is None:
                 time.sleep(2)
@@ -225,14 +261,13 @@ class BeeWorker:
                     "error": str(exc),
                     "traceback": traceback.format_exc(),
                 }
-            for attempt in range(5):
+            while True:
                 try:
                     self.submit_result(task["task_id"], result)
                     break
                 except requests.RequestException:
-                    if attempt == 4:
-                        raise
-                    time.sleep(2)
+                    self._mark_connection_lost()
+                    time.sleep(self.reconnect_interval)
 
 
 # --------------------------------------------------

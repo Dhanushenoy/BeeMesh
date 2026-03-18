@@ -86,6 +86,9 @@ def run_bee(
     hive_url=DEFAULT_HIVE_URL,
     auth_token=DEFAULT_AUTH_TOKEN,
     heartbeat_interval=10.0,
+    task_poll_interval=1.0,
+    request_timeout=30.0,
+    reconnect_interval=5.0,
 ):
     """Start a Bee worker."""
     from beemesh.worker.worker import BeeWorker
@@ -99,12 +102,18 @@ def run_bee(
         hive_url=hive_url,
         auth_token=auth_token,
         heartbeat_interval=heartbeat_interval,
+        task_poll_interval=task_poll_interval,
+        request_timeout=request_timeout,
+        reconnect_interval=reconnect_interval,
     )
 
     try:
         worker.run()
     except requests.exceptions.ConnectionError:
-        print("Error: Could not connect to Hive. Is it running?")
+        print(
+            "Error: Could not establish the initial connection to the Hive. "
+            "Check the URL, tunnel, reverse proxy, or server reachability."
+        )
 
 
 def launch_python_script(
@@ -383,6 +392,24 @@ def main():
     bee_cmd.add_argument("--hive-url", default=DEFAULT_HIVE_URL)
     bee_cmd.add_argument("--auth-token", default=DEFAULT_AUTH_TOKEN)
     bee_cmd.add_argument("--heartbeat-interval", type=float, default=10.0)
+    bee_cmd.add_argument(
+        "--task-poll-interval",
+        type=float,
+        default=1.0,
+        help="Delay between empty task polls while the bee is idle",
+    )
+    bee_cmd.add_argument(
+        "--request-timeout",
+        type=float,
+        default=30.0,
+        help="HTTP timeout for register, task, heartbeat, and result requests",
+    )
+    bee_cmd.add_argument(
+        "--reconnect-interval",
+        type=float,
+        default=5.0,
+        help="Delay before retrying after a lost Hive connection",
+    )
 
     # Status command
     status_cmd = sub.add_parser("status", help="Show Hive status")
@@ -428,6 +455,9 @@ def main():
             args.hive_url,
             args.auth_token,
             args.heartbeat_interval,
+            args.task_poll_interval,
+            args.request_timeout,
+            args.reconnect_interval,
         )
 
     elif args.command == "status":
