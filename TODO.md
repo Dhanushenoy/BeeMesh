@@ -1,1 +1,3 @@
-- [ ] Detect hive mid-process run
+- [ ] State Resume
+- [ ] Network Bandwidth
+- [ ] Mixed Precision Stability
