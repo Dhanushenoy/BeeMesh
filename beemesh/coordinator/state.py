@@ -92,6 +92,7 @@ class HiveState:
                 ram_gb=ram_gb,
                 gpu=gpu,
                 gpu_memory_gb=gpu_memory_gb,
+                architecture=architecture,
             ),
         }
 
@@ -111,12 +112,15 @@ class HiveState:
         ram_gb: float,
         gpu: Optional[str],
         gpu_memory_gb: float,
+        architecture: Optional[str],
     ) -> float:
         """Estimate a coarse worker strength score for scheduling."""
 
         score = max(cpu_cores, 1) * 1.0 + max(ram_gb, 0.0) * 0.1
         if gpu:
             score += 8.0 + max(gpu_memory_gb, 0.0) * 0.5
+        if (architecture or "").lower() == "aarch64":
+            score = min(score, 0.75)
         return round(score, 2)
 
     # -------------------------

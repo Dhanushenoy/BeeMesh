@@ -170,8 +170,8 @@ def launch_target(
             return
 
         launch_executable_sweep(target_path, sweep, hive_url, auth_token, wait_interval)
-    except Exception as _:
-        raise SystemExit("Error: Failed to launch target. Check that the path is correct and the Hive is running and there is an active worker bee. See README for more details.")
+    except Exception as exc:
+        raise SystemExit(f"Error: {exc}")
 
 def show_status(hive_url, as_json=False):
     """Query Hive status."""

@@ -196,6 +196,28 @@ def _run_finalize_hook(
     finalize(**kwargs)
 
 
+def _run_checkpoint_hook(
+    namespace: Dict[str, Any],
+    results_dir: Optional[Path],
+    extra_context: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Run ``beemesh_checkpoint`` if the script defines it."""
+
+    checkpoint = namespace.get("beemesh_checkpoint")
+    if not callable(checkpoint):
+        return
+
+    signature = inspect.signature(checkpoint)
+    kwargs: Dict[str, Any] = {}
+    if "results_dir" in signature.parameters:
+        kwargs["results_dir"] = results_dir
+    if extra_context:
+        for key, value in extra_context.items():
+            if key in signature.parameters:
+                kwargs[key] = value
+    checkpoint(**kwargs)
+
+
 def _run_live_hook(
     namespace: Dict[str, Any],
     results_dir: Optional[Path],
@@ -272,19 +294,135 @@ def _partition_axis(length: int, parts: int) -> List[tuple[int, int]]:
     return intervals
 
 
+def _partition_axis_weighted(length: int, weights: List[float]) -> List[tuple[int, int]]:
+    """Partition an axis into contiguous intervals proportional to positive weights."""
+
+    if not weights:
+        return [(0, length)]
+
+    safe_weights = [max(float(weight), 0.1) for weight in weights]
+    total = sum(safe_weights)
+    raw_sizes = [length * weight / total for weight in safe_weights]
+    sizes = [max(1, int(size)) for size in raw_sizes]
+
+    assigned = sum(sizes)
+    if assigned > length:
+        overflow = assigned - length
+        index = len(sizes) - 1
+        while overflow > 0 and index >= 0:
+            reducible = max(0, sizes[index] - 1)
+            delta = min(reducible, overflow)
+            sizes[index] -= delta
+            overflow -= delta
+            index -= 1
+    elif assigned < length:
+        remainder = length - assigned
+        for index in range(remainder):
+            sizes[index % len(sizes)] += 1
+
+    intervals = []
+    start = 0
+    for size in sizes:
+        end = start + size
+        intervals.append((start, end))
+        start = end
+    if intervals:
+        x0, _ = intervals[-1]
+        intervals[-1] = (x0, length)
+    return intervals
+
+
+def _weighted_tile_assignment(
+    workers: Dict[str, Dict[str, Any]],
+    blocks_x: int,
+    blocks_y: int,
+) -> List[List[Optional[str]]]:
+    """Assign checkerboard tiles to workers in score order using a snake walk."""
+
+    alive = [
+        (worker_id, info)
+        for worker_id, info in workers.items()
+        if info.get("status", "alive") == "alive"
+    ]
+    if not alive:
+        return [[None for _ in range(blocks_y)] for _ in range(blocks_x)]
+
+    alive = sorted(
+        alive,
+        key=lambda item: (
+            -(float(item[1].get("performance_score", 1.0) or 1.0)),
+            item[0],
+        ),
+    )
+    worker_cycle = [worker_id for worker_id, _ in alive]
+
+    tile_worker_ids: List[List[Optional[str]]] = [[None for _ in range(blocks_y)] for _ in range(blocks_x)]
+    tile_index = 0
+    for tile_x in range(blocks_x):
+        y_indices = range(blocks_y) if tile_x % 2 == 0 else range(blocks_y - 1, -1, -1)
+        for tile_y in y_indices:
+            tile_worker_ids[tile_x][tile_y] = worker_cycle[tile_index % len(worker_cycle)]
+            tile_index += 1
+    return tile_worker_ids
+
+
+def _build_partition_overlays(
+    x_parts: List[tuple[int, int]],
+    y_parts: List[tuple[int, int]],
+    workers: Dict[str, Dict[str, Any]],
+    tile_worker_ids: List[List[Optional[str]]],
+) -> List[Dict[str, Any]]:
+    """Attach lightweight worker metadata to each 2D tile for later visualization."""
+
+    overlays: List[Dict[str, Any]] = []
+    for tile_x, (x0, x1) in enumerate(x_parts):
+        for tile_y, (y0, y1) in enumerate(y_parts):
+            worker_id = None
+            if tile_x < len(tile_worker_ids) and tile_y < len(tile_worker_ids[tile_x]):
+                worker_id = tile_worker_ids[tile_x][tile_y]
+            worker_info = workers.get(worker_id, {}) if worker_id else {}
+            overlays.append(
+                {
+                    "x0": x0,
+                    "x1": x1,
+                    "y0": y0,
+                    "y1": y1,
+                    "worker_id": worker_id,
+                    "hostname": worker_info.get("hostname") or worker_id or "unassigned",
+                    "cpu_cores": worker_info.get("cpu_cores"),
+                    "ram_gb": worker_info.get("ram_gb"),
+                    "gpu": worker_info.get("gpu"),
+                    "gpu_memory_gb": worker_info.get("gpu_memory_gb"),
+                    "architecture": worker_info.get("architecture"),
+                    "performance_score": worker_info.get("performance_score"),
+                }
+            )
+    return overlays
+
+
 def _choose_grid_partitions(num_workers: int, nx: int, ny: int) -> tuple[int, int]:
     """Choose a simple near-square block decomposition."""
 
     import math
 
-    target = max(1, num_workers)
-    blocks_x = max(1, int(math.sqrt(target * max(nx, 1) / max(ny, 1))))
-    blocks_x = min(blocks_x, nx)
-    while blocks_x > 1 and target % blocks_x != 0:
-        blocks_x -= 1
-    blocks_y = max(1, target // blocks_x)
-    blocks_y = min(blocks_y, ny)
-    return blocks_x, blocks_y
+    target = max(1, num_workers * 3)
+    best = (1, target)
+    best_score = float("inf")
+    aspect = max(nx, 1) / max(ny, 1)
+
+    for blocks_x in range(1, min(target, nx) + 1):
+        blocks_y = math.ceil(target / blocks_x)
+        if blocks_y > ny:
+            continue
+        tile_aspect = (nx / blocks_x) / max(ny / blocks_y, 1e-12)
+        shape_penalty = abs(math.log(max(tile_aspect, 1e-12) / max(aspect, 1e-12)))
+        extra_tiles = blocks_x * blocks_y - target
+        score = shape_penalty + 0.08 * extra_tiles
+        if score < best_score:
+            best = (blocks_x, blocks_y)
+            best_score = score
+
+    return best
 
 
 def _weighted_worker_strips(
@@ -374,12 +512,35 @@ def _wait_for_task_results(
 
         finished = pending.intersection(results)
         for task_id in sorted(finished):
-            completed_results[task_id] = results[task_id]
+            result = results[task_id]
+            if result.get("success") is False:
+                error = result.get("error", "worker-side task failed")
+                traceback_text = result.get("traceback")
+                message = f"BeeMesh task {task_id} failed: {error}"
+                if traceback_text:
+                    message += f"\n\n{traceback_text}"
+                raise RuntimeError(message)
+            completed_results[task_id] = result
             pending.remove(task_id)
 
         if pending:
             time.sleep(wait_interval)
     return completed_results
+
+
+def _measure_hive_latency(hive_url: str) -> Optional[float]:
+    """Measure a simple Hive round-trip time using the status endpoint."""
+
+    import requests
+    import time
+
+    try:
+        start = time.perf_counter()
+        response = requests.get(f"{hive_url}/status", timeout=10)
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
+    return time.perf_counter() - start
 
 
 def _results_subdir_for_script(script_path: str) -> str:
@@ -402,18 +563,21 @@ def _launch_grid_script(
     workers: Dict[str, Dict[str, Any]],
     script_path: str,
 ) -> None:
-    """Launch a coupled structured-grid advection job with ghost exchange."""
+    """Launch a coupled structured-grid PDE job with ghost exchange."""
 
     import numpy as np
     import requests
+    import time
 
     parallel_kwargs = _evaluate_parallel_kwargs(launch_context.namespace, spec)
     if "grid" not in parallel_kwargs:
         raise ValueError("Grid launch requires beemesh.parallel(grid=<field>).")
 
-    if launch_context.namespace.get("beemesh_grid_workload") != "advection2d":
+    grid_workload = launch_context.namespace.get("beemesh_grid_workload")
+    if grid_workload not in {"advection2d", "acoustic_pulse2d"}:
         raise ValueError(
-            "Grid launch currently supports only beemesh_grid_workload = 'advection2d'."
+            "Grid launch currently supports only beemesh_grid_workload = "
+            "'advection2d' or 'acoustic_pulse2d'."
         )
 
     u = np.asarray(parallel_kwargs["grid"], dtype=float)
@@ -440,21 +604,32 @@ def _launch_grid_script(
     elif blocks_x is None or blocks_y is None:
         blocks_x, blocks_y = _choose_grid_partitions(max(len(active_workers), 1), *u.shape)
 
-    c_x = float(launch_context.namespace["c_x"])
-    c_y = float(launch_context.namespace["c_y"])
     dx = float(launch_context.namespace["dx"])
     dy = float(launch_context.namespace["dy"])
     dt = float(launch_context.namespace["dt"])
+    if grid_workload == "advection2d":
+        c_x = float(launch_context.namespace["c_x"])
+        c_y = float(launch_context.namespace["c_y"])
+        prev_u = None
+        wave_speed = None
+    else:
+        c_x = c_y = None
+        prev_u = np.asarray(launch_context.namespace["beemesh_prev_grid"], dtype=float)
+        if prev_u.shape != u.shape:
+            raise ValueError("beemesh_prev_grid must have the same shape as grid.")
+        wave_speed = float(launch_context.namespace["wave_speed"])
 
     results_subdir = _results_subdir_for_script(script_path)
 
     if weighted_strips is not None:
         x_parts = [(x0, x1) for _, x0, x1 in weighted_strips]
-        target_workers = [worker_id for worker_id, _, _ in weighted_strips]
+        y_parts = [(0, u.shape[1])]
+        tile_worker_ids = [[worker_id] for worker_id, _, _ in weighted_strips]
     else:
         x_parts = _partition_axis(u.shape[0], int(blocks_x))
-        target_workers = [None for _ in x_parts]
-    y_parts = _partition_axis(u.shape[1], int(blocks_y))
+        y_parts = _partition_axis(u.shape[1], int(blocks_y))
+        tile_worker_ids = _weighted_tile_assignment(workers, int(blocks_x), int(blocks_y))
+    partition_overlays = _build_partition_overlays(x_parts, y_parts, workers, tile_worker_ids)
     step_history = []
     snapshot_interval = int(
         launch_context.namespace.get("beemesh_snapshot_interval", max(1, steps // 12 or 1))
@@ -464,47 +639,64 @@ def _launch_grid_script(
     launch_id = uuid.uuid4().hex[:8]
 
     print(
-        f"Launching coupled grid job: {u.shape[0]}x{u.shape[1]} field, "
+        f"Launching coupled grid job ({grid_workload}): {u.shape[0]}x{u.shape[1]} field, "
         f"{steps} step(s), {blocks_x}x{blocks_y} tiles across {len(active_workers)} bee(s)."
     )
     if weighted_strips is not None:
         print("Strength-weighted strips:")
         for worker_id, x0, x1 in weighted_strips:
-            score = workers[worker_id].get("performance_score", "?")
-            hostname = workers[worker_id].get("hostname", worker_id)
+            worker_info = workers.get(worker_id, {})
+            hostname = worker_info.get("hostname", worker_id)
+            score = worker_info.get("performance_score", "?")
             print(f"  {hostname} ({worker_id}) score={score} -> x[{x0}:{x1}]")
+    else:
+        print("Checkerboard tile assignment:")
+        for tile_x, (x0, x1) in enumerate(x_parts):
+            for tile_y, (y0, y1) in enumerate(y_parts):
+                worker_id = tile_worker_ids[tile_x][tile_y]
+                worker_info = workers.get(worker_id, {})
+                hostname = worker_info.get("hostname", worker_id)
+                print(f"  tile ({tile_x},{tile_y}) x[{x0}:{x1}] y[{y0}:{y1}] -> {hostname} ({worker_id})")
 
     for step_index in range(steps):
+        step_ping_s = _measure_hive_latency(hive_url)
         tasks = []
         for tile_x, (x0, x1) in enumerate(x_parts):
-            target_worker_id = target_workers[tile_x] if tile_x < len(target_workers) else None
             for tile_y, (y0, y1) in enumerate(y_parts):
+                target_worker_id = tile_worker_ids[tile_x][tile_y]
                 tile = _extract_periodic_tile(u, x0, x1, y0, y1, ghost=1)
+                payload = {
+                    "grid_workload": grid_workload,
+                    "step_index": step_index,
+                    "tile_x": tile_x,
+                    "tile_y": tile_y,
+                    "x0": x0,
+                    "x1": x1,
+                    "y0": y0,
+                    "y1": y1,
+                    "tile": tile.tolist(),
+                    "dx": dx,
+                    "dy": dy,
+                    "dt": dt,
+                    "ghost": 1,
+                }
+                if grid_workload == "advection2d":
+                    payload["c_x"] = c_x
+                    payload["c_y"] = c_y
+                else:
+                    prev_tile = _extract_periodic_tile(prev_u, x0, x1, y0, y1, ghost=1)
+                    payload["prev_tile"] = prev_tile.tolist()
+                    payload["wave_speed"] = wave_speed
                 tile_nx = x1 - x0
                 tile_ny = y1 - y0
                 task_id = (
-                    f"advection_{launch_id}_step_{step_index}_tile_{tile_x}_{tile_y}"
+                    f"{grid_workload}_{launch_id}_step_{step_index}_tile_{tile_x}_{tile_y}"
                 )
                 tasks.append(
                     {
                         "task_id": task_id,
                         "task_type": "pde_timestep_tile",
-                        "payload": {
-                            "step_index": step_index,
-                            "tile_x": tile_x,
-                            "tile_y": tile_y,
-                            "x0": x0,
-                            "x1": x1,
-                            "y0": y0,
-                            "y1": y1,
-                            "tile": tile.tolist(),
-                            "c_x": c_x,
-                            "c_y": c_y,
-                            "dx": dx,
-                            "dy": dy,
-                            "dt": dt,
-                            "ghost": 1,
-                        },
+                        "payload": payload,
                         "requirements": {
                             "preferred_device": "cpu",
                             "min_cpu_cores": 1,
@@ -517,24 +709,28 @@ def _launch_grid_script(
 
         preflight_worker_fit(tasks, workers)
         submit_payload = {
-            "job_type": "advection2d",
+            "job_type": grid_workload,
             "payload": {
                 "tasks": tasks,
                 "results_subdir": results_subdir,
             },
             "auth_token": auth_token,
         }
+        submit_started = time.perf_counter()
         submit_response = requests.post(
             f"{hive_url}/submit_job",
             json=submit_payload,
             timeout=30,
         )
         submit_response.raise_for_status()
+        submit_duration_s = time.perf_counter() - submit_started
         task_ids = {task["task_id"] for task in tasks}
         print(
             f"Step {step_index + 1}/{steps}: dispatched {len(task_ids)} tile task(s)."
         )
+        wait_started = time.perf_counter()
         step_results = _wait_for_task_results(hive_url, task_ids, wait_interval)
+        wait_duration_s = time.perf_counter() - wait_started
 
         new_u = np.empty_like(u)
         result_paths = []
@@ -548,6 +744,8 @@ def _launch_grid_script(
             y1 = int(result["y1"])
             new_u[x0:x1, y0:y1] = interior
 
+        if grid_workload == "acoustic_pulse2d":
+            prev_u = u
         u = new_u
         latest_results_dir = result_paths[0].parent if result_paths else latest_results_dir
         step_history.append(
@@ -557,6 +755,10 @@ def _launch_grid_script(
                 "mean": float(np.mean(u)),
                 "max": float(np.max(u)),
                 "min": float(np.min(u)),
+                "hive_ping_s": step_ping_s,
+                "submit_duration_s": submit_duration_s,
+                "wait_duration_s": wait_duration_s,
+                "network_overhead_s": (step_ping_s or 0.0) + submit_duration_s,
             }
         )
         if (
@@ -564,6 +766,20 @@ def _launch_grid_script(
             or step_index == steps - 1
         ):
             frame_snapshots.append({"step": step_index + 1, "field": u.copy()})
+        _run_checkpoint_hook(
+            launch_context.namespace,
+            latest_results_dir,
+            extra_context={
+                "final_grid": u,
+                "step_history": step_history,
+                "frame_snapshots": frame_snapshots,
+                "tile_partitions": {
+                    "x_parts": x_parts,
+                    "y_parts": y_parts,
+                    "partition_overlays": partition_overlays,
+                },
+            },
+        )
 
     _run_finalize_hook(
         launch_context.namespace,
@@ -573,7 +789,11 @@ def _launch_grid_script(
             "final_grid": u,
             "step_history": step_history,
             "frame_snapshots": frame_snapshots,
-            "tile_partitions": {"x_parts": x_parts, "y_parts": y_parts},
+            "tile_partitions": {
+                "x_parts": x_parts,
+                "y_parts": y_parts,
+                "partition_overlays": partition_overlays,
+            },
         },
     )
 
