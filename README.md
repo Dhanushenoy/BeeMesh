@@ -12,6 +12,18 @@ BeeMesh enables Python scripts and external executables (e.g., C, C++, or Fortra
 
 A central **Hive coordinator** distributes tasks to connected **Bee workers**, allowing researchers to execute simulations, parameter sweeps, and numerical experiments across laptops, desktops, clusters, or remote machines.
 
+
+Demo
+
+The video below demonstrates BeeMesh running across heterogeneous hardware and multiple devices, including remote machines connected over a network.
+<video src="docs/acoustic_pulse_evolution.mp4" controls width="900"></video>
+
+If the video does not render in GitHub, you can download or view it directly here:
+
+Watch the BeeMesh demo
+
+
+
 ---
 
 ## Core Idea
