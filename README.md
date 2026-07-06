@@ -20,7 +20,7 @@ The video below demonstrates BeeMesh running across heterogeneous hardware and m
 
 If the video does not render in GitHub, you can download or view it directly here:
 
-Watch the BeeMesh demo
+[Watch the BeeMesh demo](docs/acoustic_pulse_evolution.mp4)
 
 
 
