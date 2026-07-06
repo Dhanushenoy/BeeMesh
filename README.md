@@ -1,3 +1,6 @@
+
+
+
 # BeeMesh
 ![PyPI](https://img.shields.io/pypi/v/bee-mesh)
 ![Python](https://img.shields.io/badge/python-%3E%3D3.9-blue)
@@ -16,11 +19,8 @@ A central **Hive coordinator** distributes tasks to connected **Bee workers**, a
 Demo
 
 The video below demonstrates BeeMesh running across heterogeneous hardware and multiple devices, including remote machines connected over a network.
-<video src="docs/acoustic_pulse_evolution.mp4" controls width="900"></video>
 
-If the video does not render in GitHub, you can download or view it directly here:
-
-[Watch the BeeMesh demo](docs/acoustic_pulse_evolution.mp4)
+https://github.com/user-attachments/assets/77c04668-2744-46a6-b051-564e49f3728a
 
 
 
